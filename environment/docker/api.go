@@ -15,7 +15,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/goccy/go-json"
 
-	"github.com/pterodactyl/wings/config"
+	"github.com/Tech-Gamer/nwy-wings/config"
 )
 
 var (

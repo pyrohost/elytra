@@ -15,11 +15,11 @@ import (
 	"github.com/gammazero/workerpool"
 	"github.com/goccy/go-json"
 
-	"github.com/pterodactyl/wings/config"
-	"github.com/pterodactyl/wings/environment"
-	"github.com/pterodactyl/wings/environment/docker"
-	"github.com/pterodactyl/wings/remote"
-	"github.com/pterodactyl/wings/server/filesystem"
+	"github.com/Tech-Gamer/nwy-wings/config"
+	"github.com/Tech-Gamer/nwy-wings/environment"
+	"github.com/Tech-Gamer/nwy-wings/environment/docker"
+	"github.com/Tech-Gamer/nwy-wings/remote"
+	"github.com/Tech-Gamer/nwy-wings/server/filesystem"
 )
 
 type Manager struct {

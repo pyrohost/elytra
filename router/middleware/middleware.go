@@ -11,9 +11,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/pterodactyl/wings/config"
-	"github.com/pterodactyl/wings/remote"
-	"github.com/pterodactyl/wings/server"
+	"github.com/Tech-Gamer/nwy-wings/config"
+	"github.com/Tech-Gamer/nwy-wings/remote"
+	"github.com/Tech-Gamer/nwy-wings/server"
 )
 
 // AttachRequestID attaches a unique ID to the incoming HTTP request so that any

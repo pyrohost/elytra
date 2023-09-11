@@ -8,8 +8,8 @@ import (
 
 	"emperror.dev/errors"
 
-	"github.com/pterodactyl/wings/config"
-	"github.com/pterodactyl/wings/environment"
+	"github.com/Tech-Gamer/nwy-wings/config"
+	"github.com/Tech-Gamer/nwy-wings/environment"
 )
 
 type CrashHandler struct {
@@ -70,6 +70,7 @@ func (s *Server) handleServerCrash() error {
 	}
 
 	s.PublishConsoleOutputFromDaemon("---------- Detected server process in a crashed state! ----------")
+	s.PublishConsoleOutputFromDaemon("---------- If you need help, please contact Nightway Hosting support. ----------")
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Exit code: %d", exitCode))
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Out of memory: %t", oomKilled))
 

@@ -8,7 +8,7 @@ COPY go.mod go.sum /app/
 RUN go mod download
 COPY . /app/
 RUN CGO_ENABLED=0 go build \
-    -ldflags="-s -w -X github.com/pterodactyl/wings/system.Version=$VERSION" \
+    -ldflags="-s -w -X github.com/Tech-Gamer/nwy-wings/system.Version=$VERSION" \
     -v \
     -trimpath \
     -o wings \

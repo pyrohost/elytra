@@ -1,4 +1,4 @@
-module github.com/pterodactyl/wings
+module github.com/Tech-Gamer/nwy-wings
 
 go 1.18
 

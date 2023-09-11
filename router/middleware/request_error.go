@@ -10,8 +10,8 @@ import (
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
-	"github.com/pterodactyl/wings/server"
-	"github.com/pterodactyl/wings/server/filesystem"
+	"github.com/Tech-Gamer/nwy-wings/server"
+	"github.com/Tech-Gamer/nwy-wings/server/filesystem"
 )
 
 // RequestError is a custom error type returned when something goes wrong with
