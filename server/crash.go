@@ -70,7 +70,7 @@ func (s *Server) handleServerCrash() error {
 	}
 
 	s.PublishConsoleOutputFromDaemon("---------- Detected server process in a crashed state! ----------")
-	s.PublishConsoleOutputFromDaemon("---------- If you need help, please contact Nightway Hosting support. ----------")
+	s.PublishConsoleOutputFromDaemon("---------- If you need help, please contact Nightway Hosting support at support@nightwayhosting.com or create a support ticket using our website https://nightwayhosting.com ----------")
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Exit code: %d", exitCode))
 	s.PublishConsoleOutputFromDaemon(fmt.Sprintf("Out of memory: %t", oomKilled))
 
