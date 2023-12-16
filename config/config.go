@@ -279,7 +279,7 @@ type Configuration struct {
 	// if the debug flag is passed through the command line arguments.
 	Debug bool
 
-	AppName string `default:"Nightway Hosting" json:"app_name" yaml:"app_name"`
+	AppName string `default:"Nightway Hosting Daemon" json:"app_name" yaml:"app_name"`
 
 	// A unique identifier for this node in the Panel.
 	Uuid string
