@@ -16,13 +16,13 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04]
-        go: ["1.20.11", "1.21.4"]
+        go: ["1.20.12", "1.21.5"]
         goos: [linux]
         goarch: [amd64, arm64]
 
     steps:
       - name: Setup Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
 
@@ -61,15 +61,15 @@ jobs:
           go test -race $(go list ./...)
 
       - name: Upload Release Artifact
-        uses: actions/upload-artifact@v3
-        if: ${{ github.ref == 'refs/heads/develop' || github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        if: ${{ (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request') && matrix.go == '1.20.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}
           path: dist/wings
 
       - name: Upload Debug Artifact
-        uses: actions/upload-artifact@v3
-        if: ${{ github.ref == 'refs/heads/develop' || github.event_name == 'pull_request' }}
+        uses: actions/upload-artifact@v4
+        if: ${{ (github.ref == 'refs/heads/develop' || github.event_name == 'pull_request') && matrix.go == '1.20.12' }}
         with:
           name: wings_linux_${{ matrix.goarch }}_debug
           path: dist/wings_debug
