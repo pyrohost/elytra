@@ -109,7 +109,7 @@ func (t *Transfer) SetStatus(s Status) {
 func (t *Transfer) SendMessage(v string) {
 	t.Server.Events().Publish(
 		server.TransferLogsEvent,
-		colorstring.Color("[yellow][bold]"+time.Now().Format(time.RFC1123)+" [Transfer System] [Source Node]:[default] "+v),
+		colorstring.Color("[yellow][bold]"+time.Now().Format(time.RFC1123)+" [Slave to Slave Transfer System] [Source Slave Node]:[default] "+v),
 	)
 }
 
