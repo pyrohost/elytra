@@ -224,9 +224,35 @@ func (fs *Filesystem) extractStream(ctx context.Context, opts extractStreamOptio
 		}
 		defer f.Close()
 
-		// Write our file
-		if _, err := io.Copy(f, reader); err != nil {
-			return err
+		// Read in 4 KB chunks
+		buf := make([]byte, 4096)
+		for {
+			n, err := reader.Read(buf)
+			if n > 0 {
+
+				// Check quota before writing the chunk
+				if quotaErr := fs.HasSpaceFor(int64(n)); quotaErr != nil {
+					return quotaErr
+				}
+
+				// Write the chunk
+				if _, writeErr := f.Write(buf[:n]); writeErr != nil {
+					return writeErr
+				}
+
+				// Add to quota
+				fs.addDisk(int64(n))
+			}
+
+			if err != nil {
+				// EOF are expected
+				if err == io.EOF {
+					break
+				}
+
+				// Return any other
+				return err
+			}
 		}
 
 		return nil
