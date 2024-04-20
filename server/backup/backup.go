@@ -16,6 +16,9 @@ import (
 
 	"github.com/Tech-Gamer/nwy-wings/config"
 	"github.com/Tech-Gamer/nwy-wings/remote"
+	"github.com/Tech-Gamer/nwy-wings/config"
+	"github.com/Tech-Gamer/nwy-wings/remote"
+	"github.com/Tech-Gamer/nwy-wings/server/filesystem"
 )
 
 var format = archiver.CompressedArchive{
@@ -46,7 +49,7 @@ type BackupInterface interface {
 	WithLogContext(map[string]interface{})
 	// Generate creates a backup in whatever the configured source for the
 	// specific implementation is.
-	Generate(context.Context, string, string) (*ArchiveDetails, error)
+	Generate(context.Context, *filesystem.Filesystem, string) (*ArchiveDetails, error)
 	// Ignored returns the ignored files for this backup instance.
 	Ignored() string
 	// Checksum returns a SHA1 checksum for the generated backup.
