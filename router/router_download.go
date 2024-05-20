@@ -47,7 +47,7 @@ func getDownloadBackup(c *gin.Context) {
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-				"error": "The requested backup was not found on this server.",
+        "error": "The requested backup with uuid: " + token.BackupUuid + " was not found on this server.",
 			})
 			return
 		}
