@@ -70,8 +70,6 @@ func (l Limits) ConvertedCpuLimit() int64 {
 	return l.CpuLimit * 1000
 }
 
-const MEBIBYTES_TO_BYTES = 1024 * 1024
-
 // MemoryOverheadMultiplier sets the hard limit for memory usage to be 5% more
 // than the amount of memory assigned to the server. If the memory limit for the
 // server is < 4G, use 10%, if less than 2G use 15%. This avoids unexpected
@@ -81,7 +79,7 @@ func (l Limits) MemoryOverheadMultiplier() float64 {
 }
 
 func (l Limits) BoundedMemoryLimit() int64 {
-	return int64(math.Round(float64(l.MemoryLimit) * l.MemoryOverheadMultiplier() * MEBIBYTES_TO_BYTES))
+	return int64(math.Round(float64(l.MemoryLimit) * l.MemoryOverheadMultiplier() * 1024 * 1024))
 }
 
 // ConvertedSwap returns the amount of swap available as a total in bytes. This
@@ -92,7 +90,7 @@ func (l Limits) ConvertedSwap() int64 {
 		return -1
 	}
 
-	return (l.Swap * MEBIBYTES_TO_BYTES) + l.BoundedMemoryLimit()
+	return (l.Swap * 1024 * 1024) + l.BoundedMemoryLimit()
 }
 
 // ProcessLimit returns the process limit for a container. This is currently
@@ -107,7 +105,7 @@ func (l Limits) AsContainerResources() container.Resources {
 	pids := l.ProcessLimit()
 	resources := container.Resources{
 		Memory:            l.BoundedMemoryLimit(),
-		MemoryReservation: l.MemoryLimit * MEBIBYTES_TO_BYTES,
+		MemoryReservation: l.MemoryLimit * 1024 * 1024,
 		MemorySwap:        l.ConvertedSwap(),
 		BlkioWeight:       l.IoWeight,
 		OomKillDisable:    &l.OOMDisabled,
