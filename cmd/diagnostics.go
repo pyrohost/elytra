@@ -229,8 +229,8 @@ func uploadToHastebin(hbUrl, content string) (string, error) {
 		return "", err
 	}
 	u.Path = path.Join(u.Path, "documents")
-	res, err := http.Post(u.String(), "plain/text", r)
-	if err != nil || res.StatusCode != 200 {
+	res, err := http.Post(u.String(), "text/plain", r)
+	if err != nil || res.StatusCode < 200 || res.StatusCode >= 300 {
 		fmt.Println("Failed to upload report to ", u.String(), err)
 		return "", err
 	}
