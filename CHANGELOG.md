@@ -1,5 +1,47 @@
 # Changelog
 
+## v1.11.13
+
+### Fixed
+
+* Auto-configure not working ([#5087](https://github.com/pterodactyl/panel/issues/5087))
+* Individual files unable to be decompressed ([#5034](https://github.com/pterodactyl/panel/issues/5034))
+
+## v1.11.12
+
+### Fixed
+* Arbitrary File Write/Read ([GHSA-gqmf-jqgv-v8fw](https://github.com/pterodactyl/wings/security/advisories/GHSA-gqmf-jqgv-v8fw))
+* Server-side Request Forgery (SSRF) during remote file pull ([GHSA-qq22-jj8x-4wwv](https://github.com/pterodactyl/wings/security/advisories/GHSA-qq22-jj8x-4wwv))
+* Invalid `Content-Type` being used with the `wings diagnostics` command ([#186](https://github.com/pterodactyl/wings/pull/186))
+
+## v1.11.11
+### Fixed
+* Backups missing content when a `.pteroignore` file is used
+* Archives originating from a subdirectory not containing any files ([#5030](https://github.com/pterodactyl/panel/issues/5030))
+
+## v1.11.10
+### Fixed
+* Archives randomly ignoring files and directories ([#5027](https://github.com/pterodactyl/panel/issues/5027))
+* Crash when deleting or transferring a server ([#5028](https://github.com/pterodactyl/panel/issues/5028))
+
+## v1.11.9
+### Changed
+* Release binaries are now built with Go 1.21.8
+* Updated Go dependencies
+
+### Fixed
+* [CVE-2024-27102](https://www.cve.org/CVERecord?id=CVE-2024-27102)
+
+## v1.11.8
+### Changed
+* Release binaries are now built with Go 1.20.10 (resolves [CVE-2023-44487](https://www.cve.org/CVERecord?id=CVE-2023-44487))
+* Updated Go dependencies
+
+## v1.11.7
+### Changed
+* Updated Go dependencies (this resolves an issue related to `http: invalid Host header` with Docker)
+* Wings is now built with go1.19.11
+
 ## v1.11.6
 ### Fixed
 * CVE-2023-32080
