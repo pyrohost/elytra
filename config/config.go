@@ -172,6 +172,25 @@ type SystemConfiguration struct {
 		Gid int `yaml:"gid"`
 	} `yaml:"user"`
 
+	// Passwd controls the mounting of a generated passwd files into containers started by Wings.
+	Passwd struct {
+		// Enable controls whether generated passwd files should be mounted into containers.
+		//
+		// By default this option is disabled and Wings will not mount any additional passwd
+		// files into containers.
+		Enable bool `yaml:"enabled" default:"false"`
+
+		// Directory is the directory on disk where the generated files will be stored.
+		// This directory may be temporary as it will be re-created whenever Wings is started.
+		//
+		// This path **WILL** be both written to by Wings and mounted into containers created by
+		// Wings. If you are running Wings itself in a container, this path will need to be mounted
+		// into the Wings container as the exact path on the host, which should match the value
+		// specified here. If you are using SELinux, you will need to make sure this file has the
+		// correct SELinux context in order for containers to use it.
+		Directory string `yaml:"directory" default:"/run/wings/etc"`
+	} `yaml:"passwd"`
+
 	// The amount of time in seconds that can elapse before a server's disk space calculation is
 	// considered stale and a re-check should occur. DANGER: setting this value too low can seriously
 	// impact system performance and cause massive I/O bottlenecks and high CPU usage for the Wings
@@ -497,6 +516,37 @@ func EnsurePterodactylUser() error {
 	return nil
 }
 
+// ConfigurePasswd generates required passwd files for use with containers started by Wings.
+func ConfigurePasswd() error {
+	passwd := _config.System.Passwd
+	if !passwd.Enable {
+		return nil
+	}
+
+	v := []byte(fmt.Sprintf(
+		`root:x:0:
+container:x:%d:
+nogroup:x:65534:`,
+		_config.System.User.Gid,
+	))
+	if err := os.WriteFile(filepath.Join(passwd.Directory, "group"), v, 0o644); err != nil {
+		return fmt.Errorf("failed to write file to %s/group: %v", passwd.Directory, err)
+	}
+
+	v = []byte(fmt.Sprintf(
+		`root:x:0:0::/root:/bin/sh
+container:x:%d:%d::/home/container:/bin/sh
+nobody:x:65534:65534::/var/empty:/bin/sh
+`,
+		_config.System.User.Uid,
+		_config.System.User.Gid,
+	))
+	if err := os.WriteFile(filepath.Join(passwd.Directory, "passwd"), v, 0o644); err != nil {
+		return fmt.Errorf("failed to write file to %s/passwd: %v", passwd.Directory, err)
+	}
+	return nil
+}
+
 // FromFile reads the configuration from the provided file and stores it in the
 // global singleton for this instance.
 func FromFile(path string) error {
@@ -559,6 +609,13 @@ func ConfigureDirectories() error {
 	log.WithField("path", _config.System.BackupDirectory).Debug("ensuring backup data directory exists")
 	if err := os.MkdirAll(_config.System.BackupDirectory, 0o700); err != nil {
 		return err
+	}
+
+	if _config.System.Passwd.Enable {
+		log.WithField("path", _config.System.Passwd.Directory).Debug("ensuring passwd directory exists")
+		if err := os.MkdirAll(_config.System.Passwd.Directory, 0o755); err != nil {
+			return err
+		}
 	}
 
 	return nil
