@@ -2,11 +2,11 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/goccy/go-json"
 
 	"github.com/pterodactyl/wings/events"
 	"github.com/pterodactyl/wings/system"

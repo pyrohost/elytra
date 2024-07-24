@@ -49,7 +49,7 @@ func (e *Environment) Attach(ctx context.Context) error {
 		return nil
 	}
 
-	opts := types.ContainerAttachOptions{
+	opts := container.AttachOptions{
 		Stdin:  true,
 		Stdout: true,
 		Stderr: true,
@@ -103,7 +103,7 @@ func (e *Environment) Attach(ctx context.Context) error {
 // container. This allows memory, cpu, and IO limitations to be adjusted on the
 // fly for individual instances.
 func (e *Environment) InSituUpdate() error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if _, err := e.ContainerInspect(ctx); err != nil {
@@ -270,7 +270,7 @@ func (e *Environment) Destroy() error {
 	// We set it to stopping than offline to prevent crash detection from being triggered.
 	e.SetState(environment.ProcessStoppingState)
 
-	err := e.client.ContainerRemove(context.Background(), e.Id, types.ContainerRemoveOptions{
+	err := e.client.ContainerRemove(context.Background(), e.Id, container.RemoveOptions{
 		RemoveVolumes: true,
 		RemoveLinks:   false,
 		Force:         true,
@@ -316,7 +316,7 @@ func (e *Environment) SendCommand(c string) error {
 // is running or not, it will simply try to read the last X bytes of the file
 // and return them.
 func (e *Environment) Readlog(lines int) ([]string, error) {
-	r, err := e.client.ContainerLogs(context.Background(), e.Id, types.ContainerLogsOptions{
+	r, err := e.client.ContainerLogs(context.Background(), e.Id, container.LogsOptions{
 		ShowStdout: true,
 		ShowStderr: true,
 		Tail:       strconv.Itoa(lines),
@@ -355,7 +355,7 @@ func (e *Environment) ensureImageExists(image string) error {
 	// Give it up to 15 minutes to pull the image. I think this should cover 99.8% of cases where an
 	// image pull might fail. I can't imagine it will ever take more than 15 minutes to fully pull
 	// an image. Let me know when I am inevitably wrong here...
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*15)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 	defer cancel()
 
 	// Get a registry auth configuration from the config.

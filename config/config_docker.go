@@ -2,11 +2,11 @@ package config
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"sort"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/registry"
-	"github.com/goccy/go-json"
 )
 
 type dockerNetworkInterfaces struct {

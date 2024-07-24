@@ -3,13 +3,13 @@ package system
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strconv"
 	"sync"
 
 	"emperror.dev/errors"
-	"github.com/goccy/go-json"
 )
 
 var (

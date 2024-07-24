@@ -2,6 +2,7 @@ package downloader
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
@@ -14,7 +15,6 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 
 	"github.com/pterodactyl/wings/server"
