@@ -436,7 +436,7 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		}
 		var m = ""
 		if e.Type().IsRegular() {
-			// Get mimetype rom file extension
+			// Get mimetype from file extension
 			splitted := strings.Split(e.Name(), ".")
 			fileExtension := splitted[len(splitted)-1]
 			m = mime.TypeByExtension("." + fileExtension)
