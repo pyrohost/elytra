@@ -3,6 +3,7 @@ package filesystem
 import (
 	"fmt"
 	"io"
+	"mime"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,8 +14,6 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/apex/log"
-	"github.com/gabriel-vasile/mimetype"
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/pterodactyl/wings/config"
@@ -435,26 +434,17 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		} else {
 			d = "application/octet-stream"
 		}
-		var m *mimetype.MIME
+		var m = ""
 		if e.Type().IsRegular() {
-			// TODO: I should probably find a better way to do this.
-			eO := e.(interface {
-				Open() (ufs.File, error)
-			})
-			f, err := eO.Open()
-			if err != nil {
-				return Stat{}, err
-			}
-			m, err = mimetype.DetectReader(f)
-			if err != nil {
-				log.Error(err.Error())
-			}
-			_ = f.Close()
+			// Get mimetype of file extension
+			splitted := strings.Split(e.Name(), ".")
+			fileExtension := splitted[len(splitted)-1]
+			m = mime.TypeByExtension("." + fileExtension)
 		}
 
 		st := Stat{FileInfo: info, Mimetype: d}
-		if m != nil {
-			st.Mimetype = m.String()
+		if m != "" {
+			st.Mimetype = m
 		}
 		return st, nil
 	})
