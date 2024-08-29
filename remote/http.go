@@ -3,6 +3,7 @@ package remote
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,7 +16,6 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/cenkalti/backoff/v4"
-	"github.com/goccy/go-json"
 
 	"github.com/pterodactyl/wings/system"
 )

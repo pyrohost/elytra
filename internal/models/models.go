@@ -2,9 +2,9 @@ package models
 
 import (
 	"database/sql"
+	"encoding/json"
 
 	"emperror.dev/errors"
-	"github.com/goccy/go-json"
 )
 
 type JsonNullString struct {

@@ -3,6 +3,7 @@ package parser
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"io"
 	"strconv"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/apex/log"
 	"github.com/beevik/etree"
 	"github.com/buger/jsonparser"
-	"github.com/goccy/go-json"
 	"github.com/icza/dyno"
 	"github.com/magiconair/properties"
 	"gopkg.in/ini.v1"
@@ -191,7 +191,7 @@ func (cfr *ConfigurationFileReplacement) UnmarshalJSON(data []byte) error {
 // Parse parses a given configuration file and updates all the values within
 // as defined in the API response from the Panel.
 func (f *ConfigurationFile) Parse(file ufs.File) error {
-	//log.WithField("path", path).WithField("parser", f.Parser.String()).Debug("parsing server configuration file")
+	// log.WithField("path", path).WithField("parser", f.Parser.String()).Debug("parsing server configuration file")
 
 	// What the fuck is going on here?
 	if mb, err := json.Marshal(config.Get()); err != nil {

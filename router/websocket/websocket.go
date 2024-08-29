@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,7 +15,6 @@ import (
 	"github.com/apex/log"
 	"github.com/gbrlsnchs/jwt/v3"
 	"github.com/gin-gonic/gin"
-	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
