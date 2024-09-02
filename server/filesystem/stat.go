@@ -52,8 +52,10 @@ func statFromFile(f ufs.File) (Stat, error) {
 	if !s.IsDir() {
 		// Get mimetype from file extension
 		splitted := strings.Split(f.Name(), ".")
-		fileExtension := splitted[len(splitted)-1]
-		m = mime.TypeByExtension("." + fileExtension)
+		if len(splitted) >= 2 {
+			fileExtension := splitted[len(splitted)-1]
+			m = mime.TypeByExtension("." + fileExtension)
+		}
 
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return Stat{}, err

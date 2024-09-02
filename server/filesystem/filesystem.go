@@ -438,8 +438,10 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		if e.Type().IsRegular() {
 			// Get mimetype from file extension
 			splitted := strings.Split(e.Name(), ".")
-			fileExtension := splitted[len(splitted)-1]
-			m = mime.TypeByExtension("." + fileExtension)
+			if len(splitted) >= 2 {
+				fileExtension := splitted[len(splitted)-1]
+				m = mime.TypeByExtension("." + fileExtension)
+			}
 		}
 
 		st := Stat{FileInfo: info, Mimetype: d}
