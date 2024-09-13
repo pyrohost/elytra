@@ -432,7 +432,7 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		if e.Type().IsDir() {
 			d = "inode/directory"
 		} else {
-			d = "application/octet-stream"
+			d = "text/plain"
 		}
 		var m = ""
 		if e.Type().IsRegular() {
