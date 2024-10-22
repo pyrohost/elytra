@@ -3,10 +3,10 @@ package filesystem
 import (
 	"encoding/json"
 	"io"
+	"mime"
 	"strconv"
+	"strings"
 	"time"
-
-	"github.com/gabriel-vasile/mimetype"
 
 	"github.com/pterodactyl/wings/internal/ufs"
 )
@@ -48,12 +48,15 @@ func statFromFile(f ufs.File) (Stat, error) {
 	if err != nil {
 		return Stat{}, err
 	}
-	var m *mimetype.MIME
+	var m = ""
 	if !s.IsDir() {
-		m, err = mimetype.DetectReader(f)
-		if err != nil {
-			return Stat{}, err
+		// Get mimetype from file extension
+		splitted := strings.Split(f.Name(), ".")
+		if len(splitted) >= 2 {
+			fileExtension := splitted[len(splitted)-1]
+			m = mime.TypeByExtension("." + fileExtension)
 		}
+
 		if _, err := f.Seek(0, io.SeekStart); err != nil {
 			return Stat{}, err
 		}
@@ -62,8 +65,8 @@ func statFromFile(f ufs.File) (Stat, error) {
 		FileInfo: s,
 		Mimetype: "inode/directory",
 	}
-	if m != nil {
-		st.Mimetype = m.String()
+	if m != "" {
+		st.Mimetype = m
 	}
 	return st, nil
 }
