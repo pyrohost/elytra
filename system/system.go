@@ -65,7 +65,7 @@ type System struct {
 	OSType             string   `json:"os_type"`
 }
 
-func GetSystemInformation() (*Information, error) {
+func GetSystemInformation(rootDirectoryPath string) (*Information, error) {
 	k, err := kernel.GetKernelVersion()
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func GetSystemInformation() (*Information, error) {
 		memPercentUsage, memBytesUsage = &v, &memStats.Used
 	}
 
-	diskStats, err := disk.Usage("/")
+	diskStats, err := disk.Usage(rootDirectoryPath)
 	var diskBytes, diskBytesUsage *uint64
 	var diskPercentUsage *float64
 	if err == nil {
@@ -122,7 +122,6 @@ func GetSystemInformation() (*Information, error) {
 		v := math.Round(diskStats.UsedPercent*100) / 100
 		diskPercentUsage = &v
 	}
-
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
