@@ -14,6 +14,8 @@ import (
 	"runtime"
 	"strconv"
 	"time"
+	"os/signal"
+	"syscall"
 
 	"github.com/NYTimes/logrotate"
 	"github.com/apex/log"
@@ -376,7 +378,19 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	if err := s.ListenAndServe(); err != nil {
 		log.WithField("error", err).Fatal("failed to configure HTTP server")
 	}
+	go func() {
+		log.Info("Listening to SIGTERM signal...")
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+		log.Info("Shutting down gracefully...")
+		err := s.Shutdown(context.Background())
+		if err != nil {
+			log.Fatal("Failed to gracefully shutdown HTTP/s server")
+			return
+		}
+	}()
 }
+
 
 // Reads the configuration from the disk and then sets up the global singleton
 // with all the configuration values.
