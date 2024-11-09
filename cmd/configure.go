@@ -125,7 +125,7 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Printf("%+v", req.Header)
-	fmt.Printf(req.URL.String())
+	fmt.Print(req.URL.String())
 
 	res, err := c.Do(req)
 	if err != nil {
@@ -145,6 +145,9 @@ func configureCmdRun(cmd *cobra.Command, args []string) {
 	}
 
 	b, err := io.ReadAll(res.Body)
+	if err != nil {
+		panic(err)
+	}
 
 	cfg, err := config.NewAtPath(configPath)
 	if err != nil {

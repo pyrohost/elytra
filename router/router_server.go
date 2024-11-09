@@ -15,6 +15,7 @@ import (
 	"github.com/pterodactyl/wings/router/tokens"
 	"github.com/pterodactyl/wings/server"
 	"github.com/pterodactyl/wings/server/transfer"
+	"github.com/pterodactyl/wings/system"
 )
 
 // Returns a single server from the collection of servers.
@@ -260,4 +261,24 @@ func postServerDenyWSTokens(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// Returns docker disk utilization
+func getDockerDiskUsage(c *gin.Context) {
+	d, err := system.GetDockerDiskUsage(c)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, d)
+}
+
+// Prunes the docker image cache
+func pruneDockerImages(c *gin.Context) {
+	p, err := system.PruneDockerImages(c)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, p)
 }

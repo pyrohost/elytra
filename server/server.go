@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -143,12 +144,29 @@ func (s *Server) Context() context.Context {
 	return s.ctx
 }
 
+// DetermineServerTimezone checks the envvars for a non-empty SERVER_TIMEZONE key,
+// validates if it's a valid timezone, and returns it. If not, returns the defaultTimezone.
+func DetermineServerTimezone(envvars map[string]interface{}, defaultTimezone string) string {
+	// Check if SERVER_TIMEZONE exists in envvars and is non-empty
+	timezone, ok := envvars["SERVER_TIMEZONE"].(string)
+	if ok && timezone != "" {
+		// Validate the timezone
+		_, err := time.LoadLocation(timezone)
+		if err == nil {
+			// Valid timezone, return it
+			return timezone
+		}
+		// Invalid timezone, fall through to return defaultTimezone
+	}
+	// Return the defaultTimezone if SERVER_TIMEZONE is not set, empty, or invalid
+	return defaultTimezone
+}
+
 // Returns all of the environment variables that should be assigned to a running
 // server instance.
 func (s *Server) GetEnvironmentVariables() []string {
 	out := []string{
-		// TODO: allow this to be overridden by the user.
-		fmt.Sprintf("TZ=%s", config.Get().System.Timezone),
+		fmt.Sprintf("TZ=%s", DetermineServerTimezone(s.Config().EnvVars, config.Get().System.Timezone)),
 		fmt.Sprintf("STARTUP=%s", s.Config().Invocation),
 		fmt.Sprintf("SERVER_MEMORY=%d", s.MemoryLimit()),
 		fmt.Sprintf("SERVER_IP=%s", s.Config().Allocations.DefaultMapping.Ip),

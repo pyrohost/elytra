@@ -14,6 +14,8 @@ import (
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/load"
 	"github.com/shirou/gopsutil/v3/mem"
+	"github.com/docker/docker/api/types/filters"
+
 )
 
 type Information struct {
@@ -33,6 +35,14 @@ type DockerInformation struct {
 type DockerCgroups struct {
 	Driver  string `json:"driver"`
 	Version string `json:"version"`
+}
+
+type DockerDiskUsage struct {
+	ContainersSize int64 `json:"containers_size"`
+	ImagesTotal    int   `json:"images_total"`
+	ImagesActive   int64 `json:"images_active"`
+	ImagesSize     int64 `json:"images_size"`
+	BuildCacheSize int64 `json:"build_cache_size"`
 }
 
 type DockerContainers struct {
@@ -211,4 +221,54 @@ func GetDockerInfo(ctx context.Context) (types.Version, system.Info, error) {
 	}
 
 	return dockerVersion, dockerInfo, nil
+}
+
+
+func GetDockerDiskUsage(ctx context.Context) (*DockerDiskUsage, error) {
+	// TODO: find a way to re-use the client from the docker environment.
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return &DockerDiskUsage{}, err
+	}
+	defer c.Close()
+	d, err := c.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return &DockerDiskUsage{}, err
+	}
+	var bcs int64
+	for _, bc := range d.BuildCache {
+		if !bc.Shared {
+			bcs += bc.Size
+		}
+	}
+	var a int64
+	for _, i := range d.Images {
+		if i.Containers > 0 {
+			a++
+		}
+	}
+	var cs int64
+	for _, b := range d.Containers {
+		cs += b.SizeRootFs
+	}
+	return &DockerDiskUsage{
+		ImagesTotal:    len(d.Images),
+		ImagesActive:   a,
+		ImagesSize:     int64(d.LayersSize),
+		ContainersSize: int64(cs),
+		BuildCacheSize: bcs,
+	}, nil
+}
+func PruneDockerImages(ctx context.Context) (types.ImagesPruneReport, error) {
+	// TODO: find a way to re-use the client from the docker environment.
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return types.ImagesPruneReport{}, err
+	}
+	defer c.Close()
+	prune, err := c.ImagesPrune(ctx, filters.Args{})
+	if err != nil {
+		return types.ImagesPruneReport{}, err
+	}
+	return prune, nil
 }

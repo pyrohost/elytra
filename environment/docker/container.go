@@ -251,7 +251,7 @@ func (e *Environment) Create() error {
 		ReadonlyRootfs: true,
 		CapDrop: []string{
 			"setpcap", "mknod", "audit_write", "net_raw", "dac_override",
-			"fowner", "fsetid", "net_bind_service", "sys_chroot", "setfcap",
+			"fowner", "fsetid", "net_bind_service", "sys_chroot", "setfcap","sys_ptrace",
 		},
 		NetworkMode: networkMode,
 		UsernsMode:  container.UsernsMode(cfg.Docker.UsernsMode),
