@@ -18,6 +18,7 @@ import (
 	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/apex/log"
 	"github.com/docker/docker/api/types"
+	dockersystem "github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/pkg/parsers/kernel"
 	"github.com/docker/docker/pkg/parsers/operatingsystem"
 	"github.com/spf13/cobra"
@@ -206,18 +207,18 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 	}
 }
 
-func getDockerInfo() (types.Version, types.Info, error) {
+func getDockerInfo() (types.Version, dockersystem.Info, error) {
 	client, err := environment.Docker()
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockersystem.Info{}, err
 	}
 	dockerVersion, err := client.ServerVersion(context.Background())
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockersystem.Info{}, err
 	}
 	dockerInfo, err := client.Info(context.Background())
 	if err != nil {
-		return types.Version{}, types.Info{}, err
+		return types.Version{}, dockersystem.Info{}, err
 	}
 	return dockerVersion, dockerInfo, nil
 }

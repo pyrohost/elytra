@@ -7,7 +7,6 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 
@@ -39,7 +38,7 @@ func ConfigureDocker(ctx context.Context) error {
 	}
 
 	nw := config.Get().Docker.Network
-	resource, err := cli.NetworkInspect(ctx, nw.Name, types.NetworkInspectOptions{})
+	resource, err := cli.NetworkInspect(ctx, nw.Name, network.InspectOptions{})
 	if err != nil {
 		if !client.IsErrNotFound(err) {
 			return err
@@ -72,9 +71,10 @@ func ConfigureDocker(ctx context.Context) error {
 // Creates a new network on the machine if one does not exist already.
 func createDockerNetwork(ctx context.Context, cli *client.Client) error {
 	nw := config.Get().Docker.Network
-	_, err := cli.NetworkCreate(ctx, nw.Name, types.NetworkCreate{
+	enableIPv6 := true
+	_, err := cli.NetworkCreate(ctx, nw.Name, network.CreateOptions{
 		Driver:     nw.Driver,
-		EnableIPv6: true,
+		EnableIPv6: &enableIPv6,
 		Internal:   nw.IsInternal,
 		IPAM: &network.IPAM{
 			Config: []network.IPAMConfig{{
