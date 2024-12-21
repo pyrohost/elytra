@@ -22,6 +22,7 @@ import (
 var format = archives.CompressedArchive{
 	Compression: archives.Gz{},
 	Archival:    archives.Tar{},
+	Extraction:  archives.Tar{},
 }
 
 type AdapterType string
