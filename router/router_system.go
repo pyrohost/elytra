@@ -35,13 +35,25 @@ func getSystemInformation(c *gin.Context) {
 		KernelVersion string `json:"kernel_version"`
 		OS            string `json:"os"`
 		Version       string `json:"version"`
+		Supercharged  bool   `json:"supercharged"`
 	}{
 		Architecture:  i.System.Architecture,
 		CPUCount:      i.System.CPUThreads,
 		KernelVersion: i.System.KernelVersion,
 		OS:            i.System.OSType,
 		Version:       i.Version,
+		Supercharged:  true, // Indicate to the Panel that this is SuperDaemon
 	})
+}
+
+// Returns resource utilization info for the system wings is running on.
+func getSystemUtilization(c *gin.Context) {
+	u, err := system.GetSystemUtilization()
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, u)
 }
 
 // Returns all the servers that are registered and configured correctly on
