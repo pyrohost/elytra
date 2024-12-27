@@ -85,7 +85,8 @@ func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS
 			// zip.Reader doesn't suffer from issue #330 and #310 according to local test (but they should be fixed anyway)
 			return zip.NewReader(f, info.Size())
 		case archives.Archival:
-			return archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
+			// Returning pointer in neccessary, as only on pointer there is implementation of ReadDir method
+			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
 		case archives.Compression:
 			return archiverext.FileFS{File: f, Compression: ff}, nil
 		}
