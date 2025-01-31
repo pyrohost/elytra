@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pkg/sftp"
 	"net/http"
 	"os"
 	"strings"
@@ -74,6 +75,8 @@ type Server struct {
 
 	logSink     *system.SinkPool
 	installSink *system.SinkPool
+
+	activeSFTPConnections map[string][]*sftp.RequestServer
 }
 
 // New returns a new server instance with a context and all of the default
@@ -361,4 +364,20 @@ func (s *Server) ToAPIResponse() APIResponse {
 		Utilization:   s.Proc(),
 		Configuration: *s.Config(),
 	}
+}
+
+func (s *Server) GetActiveSFTPConnections() map[string][]*sftp.RequestServer {
+	return s.activeSFTPConnections
+}
+
+func (s *Server) RemoveActiveSFTPConnection(username string) {
+	delete(s.activeSFTPConnections, username)
+}
+
+func (s *Server) AddActiveSFTPConnection(username string, conn *sftp.RequestServer) {
+	if s.activeSFTPConnections == nil {
+		s.activeSFTPConnections = make(map[string][]*sftp.RequestServer)
+	}
+
+	s.activeSFTPConnections[username] = append(s.activeSFTPConnections[username], conn)
 }
