@@ -371,10 +371,16 @@ func (s *Server) GetActiveSFTPConnections() map[string][]*sftp.RequestServer {
 }
 
 func (s *Server) RemoveActiveSFTPConnection(username string) {
+	s.Lock()
+	defer s.Unlock()
+
 	delete(s.activeSFTPConnections, username)
 }
 
 func (s *Server) AddActiveSFTPConnection(username string, conn *sftp.RequestServer) {
+	s.Lock()
+	defer s.Unlock()
+
 	if s.activeSFTPConnections == nil {
 		s.activeSFTPConnections = make(map[string][]*sftp.RequestServer)
 	}
