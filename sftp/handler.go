@@ -30,10 +30,10 @@ type Handler struct {
 	server      *server.Server
 	fs          *filesystem.Filesystem
 	events      *eventHandler
-	username    string
 	permissions []string
 	logger      *log.Entry
 	ro          bool
+	username    string
 }
 
 // NewHandler returns a new connection handler for the SFTP server. This allows a given user
