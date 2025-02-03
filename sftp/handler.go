@@ -294,11 +294,6 @@ func (h *Handler) can(permission string) bool {
 	if h.server.IsSuspended() {
 		return false
 	}
-	activeSFTPConnections := h.server.GetActiveSFTPConnections()
-
-	if activeSFTPConnections[h.username] == nil {
-		return false
-	}
 
 	for _, p := range h.permissions {
 		// If we match the permission specifically, or the user has been granted the "*"

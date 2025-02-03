@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/sftp"
 	"net/http"
 	"os"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
+	"golang.org/x/crypto/ssh"
 
 	"github.com/pterodactyl/wings/config"
 	"github.com/pterodactyl/wings/environment"
@@ -76,7 +76,7 @@ type Server struct {
 	logSink     *system.SinkPool
 	installSink *system.SinkPool
 
-	activeSFTPConnections map[string][]*sftp.RequestServer
+	activeSFTPConnections map[string][]*ssh.ServerConn
 }
 
 // New returns a new server instance with a context and all of the default
@@ -95,7 +95,7 @@ func New(client remote.Client) (*Server, error) {
 			system.LogSink:     system.NewSinkPool(),
 			system.InstallSink: system.NewSinkPool(),
 		},
-		activeSFTPConnections: make(map[string][]*sftp.RequestServer),
+		activeSFTPConnections: make(map[string][]*ssh.ServerConn),
 	}
 	if err := defaults.Set(&s); err != nil {
 		return nil, errors.Wrap(err, "server: could not set default values for struct")
@@ -368,22 +368,22 @@ func (s *Server) ToAPIResponse() APIResponse {
 }
 
 // GetActiveSFTPConnections returns a map of active SFTP connections for the server.
-func (s *Server) GetActiveSFTPConnections() map[string][]*sftp.RequestServer {
+func (s *Server) GetActiveSFTPConnections() map[string][]*ssh.ServerConn {
 	return s.activeSFTPConnections
 }
 
 // RemoveActiveSFTPConnection removes an active SFTP connection for the server.
 // If the rs parameter is nil, all active SFTP connections for the user will be removed.
-func (s *Server) RemoveActiveSFTPConnection(username string, rs *sftp.RequestServer) {
+func (s *Server) RemoveActiveSFTPConnection(username string, sc *ssh.ServerConn) {
 	s.Lock()
 	defer s.Unlock()
 
-	if rs == nil {
+	if sc == nil {
 		delete(s.activeSFTPConnections, username)
 	} else {
 		if conns, ok := s.activeSFTPConnections[username]; ok {
 			for k, v := range conns {
-				if v == rs {
+				if v == sc {
 					s.activeSFTPConnections[username] = append(conns[:k], conns[k+1:]...)
 					break
 				}
@@ -393,9 +393,9 @@ func (s *Server) RemoveActiveSFTPConnection(username string, rs *sftp.RequestSer
 }
 
 // AddActiveSFTPConnection adds an active SFTP connection for the server.
-func (s *Server) AddActiveSFTPConnection(username string, rs *sftp.RequestServer) {
+func (s *Server) AddActiveSFTPConnection(username string, sc *ssh.ServerConn) {
 	s.Lock()
 	defer s.Unlock()
 
-	s.activeSFTPConnections[username] = append(s.activeSFTPConnections[username], rs)
+	s.activeSFTPConnections[username] = append(s.activeSFTPConnections[username], sc)
 }

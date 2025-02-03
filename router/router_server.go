@@ -274,10 +274,11 @@ func deleteServerSFTPConnection(c *gin.Context) {
 		return
 	}
 
-	for username, _ := range s.GetActiveSFTPConnections() {
-		if username == data.Username {
-			s.RemoveActiveSFTPConnection(username, nil)
+	if activeSessions := s.GetActiveSFTPConnections()[data.Username]; activeSessions != nil {
+		for _, session := range activeSessions {
+			session.Close()
 		}
+		s.RemoveActiveSFTPConnection(data.Username, nil)
 	}
 
 	c.Status(http.StatusNoContent)
