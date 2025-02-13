@@ -12,7 +12,7 @@ import (
 	"emperror.dev/errors"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/juju/ratelimit"
-	"github.com/mholt/archiver/v4"
+	"github.com/mholt/archives"
 
 	"github.com/pterodactyl/wings/config"
 	"github.com/pterodactyl/wings/remote"
@@ -93,7 +93,7 @@ func (s *S3Backup) Restore(ctx context.Context, r io.Reader, callback RestoreCal
 	if writeLimit := int64(config.Get().System.Backups.WriteLimit * 1024 * 1024); writeLimit > 0 {
 		reader = ratelimit.Reader(r, ratelimit.NewBucketWithRate(float64(writeLimit), writeLimit))
 	}
-	if err := format.Extract(ctx, reader, nil, func(ctx context.Context, f archiver.File) error {
+	if err := format.Extract(ctx, reader, func(ctx context.Context, f archives.FileInfo) error {
 		r, err := f.Open()
 		if err != nil {
 			return err
@@ -231,7 +231,6 @@ func (fu *s3FileUploader) uploadPart(ctx context.Context, part string, size int6
 
 		return nil
 	}, fu.backoff(ctx))
-
 	if err != nil {
 		if v, ok := err.(*backoff.PermanentError); ok {
 			return "", v.Unwrap()

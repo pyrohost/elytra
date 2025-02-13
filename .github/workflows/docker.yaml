@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-22.04
     # Always run against a tag, even if the commit into the tag has [docker skip] within the commit message.
     if: "!contains(github.ref, 'develop') || (!contains(github.event.head_commit.message, 'skip docker') && !contains(github.event.head_commit.message, 'docker skip'))"
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: Code checkout
         uses: actions/checkout@v4
@@ -22,7 +25,7 @@ jobs:
         id: docker_meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/pterodactyl/wings
+          images: ghcr.io/${{ github.repository }}
           flavor: |
             latest=false
           tags: |
@@ -40,8 +43,8 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.REGISTRY_TOKEN }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Get Build Information
         id: build_info

@@ -9,6 +9,8 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write # write is required to create releases and push.
 
     steps:
       - name: Code Checkout
@@ -17,7 +19,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.21.9"
+          go-version: "1.22.10"
 
       - name: Build release binaries
         env:

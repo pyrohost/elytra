@@ -112,6 +112,9 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	if err := config.EnsurePterodactylUser(); err != nil {
 		log.WithField("error", err).Fatal("failed to create pterodactyl system user")
 	}
+	if err := config.ConfigurePasswd(); err != nil {
+		log.WithField("error", err).Fatal("failed to configure container passwd file")
+	}
 	log.WithFields(log.Fields{
 		"username": config.Get().System.Username,
 		"uid":      config.Get().System.User.Uid,

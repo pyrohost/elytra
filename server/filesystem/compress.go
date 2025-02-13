@@ -13,7 +13,7 @@ import (
 
 	"emperror.dev/errors"
 	"github.com/klauspost/compress/zip"
-	"github.com/mholt/archiver/v4"
+	"github.com/mholt/archives"
 
 	"github.com/pterodactyl/wings/internal/ufs"
 	"github.com/pterodactyl/wings/server/filesystem/archiverext"
@@ -58,8 +58,8 @@ func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS
 	}
 	// Do not use defer to close `f`, it will likely be used later.
 
-	format, _, err := archiver.Identify(filepath.Base(p), f)
-	if err != nil && !errors.Is(err, archiver.ErrNoMatch) {
+	format, _, err := archives.Identify(ctx, filepath.Base(p), f)
+	if err != nil && !errors.Is(err, archives.NoMatch) {
 		_ = f.Close()
 		return nil, err
 	}
@@ -78,20 +78,20 @@ func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS
 
 	if format != nil {
 		switch ff := format.(type) {
-		case archiver.Zip:
+		case archives.Zip:
 			// zip.Reader is more performant than ArchiveFS, because zip.Reader caches content information
 			// and zip.Reader can open several content files concurrently because of io.ReaderAt requirement
 			// while ArchiveFS can't.
 			// zip.Reader doesn't suffer from issue #330 and #310 according to local test (but they should be fixed anyway)
 			return zip.NewReader(f, info.Size())
-		case archiver.Archival:
-			return archiver.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
-		case archiver.Compression:
+		case archives.Extraction:
+			return &archives.ArchiveFS{Stream: io.NewSectionReader(f, 0, info.Size()), Format: ff, Context: ctx}, nil
+		case archives.Compression:
 			return archiverext.FileFS{File: f, Compression: ff}, nil
 		}
 	}
 	_ = f.Close()
-	return nil, archiver.ErrNoMatch
+	return nil, archives.NoMatch
 }
 
 // SpaceAvailableForDecompression looks through a given archive and determines
@@ -105,7 +105,7 @@ func (fs *Filesystem) SpaceAvailableForDecompression(ctx context.Context, dir st
 
 	fsys, err := fs.archiverFileSystem(ctx, filepath.Join(dir, file))
 	if err != nil {
-		if errors.Is(err, archiver.ErrNoMatch) {
+		if errors.Is(err, archives.NoMatch) {
 			return newFilesystemError(ErrCodeUnknownArchive, err)
 		}
 		return err
@@ -147,9 +147,9 @@ func (fs *Filesystem) DecompressFile(ctx context.Context, dir string, file strin
 	defer f.Close()
 
 	// Identify the type of archive we are dealing with.
-	format, input, err := archiver.Identify(filepath.Base(file), f)
+	format, input, err := archives.Identify(ctx, filepath.Base(file), f)
 	if err != nil {
-		if errors.Is(err, archiver.ErrNoMatch) {
+		if errors.Is(err, archives.NoMatch) {
 			return newFilesystemError(ErrCodeUnknownArchive, err)
 		}
 		return err
@@ -165,9 +165,9 @@ func (fs *Filesystem) DecompressFile(ctx context.Context, dir string, file strin
 
 // ExtractStreamUnsafe .
 func (fs *Filesystem) ExtractStreamUnsafe(ctx context.Context, dir string, r io.Reader) error {
-	format, input, err := archiver.Identify("archive.tar.gz", r)
+	format, input, err := archives.Identify(ctx, "archive.tar.gz", r)
 	if err != nil {
-		if errors.Is(err, archiver.ErrNoMatch) {
+		if errors.Is(err, archives.NoMatch) {
 			return newFilesystemError(ErrCodeUnknownArchive, err)
 		}
 		return err
@@ -185,26 +185,24 @@ type extractStreamOptions struct {
 	// File name of the archive.
 	FileName string
 	// Format of the archive.
-	Format archiver.Format
+	Format archives.Format
 	// Reader for the archive.
 	Reader io.Reader
 }
 
 func (fs *Filesystem) extractStream(ctx context.Context, opts extractStreamOptions) error {
-
 	// See if it's a compressed archive, such as TAR or a ZIP
-	ex, ok := opts.Format.(archiver.Extractor)
+	ex, ok := opts.Format.(archives.Extractor)
 	if !ok {
-
 		// If not, check if it's a single-file compression, such as
 		// .log.gz, .sql.gz, and so on
-		de, ok := opts.Format.(archiver.Decompressor)
+		de, ok := opts.Format.(archives.Decompressor)
 		if !ok {
 			return nil
 		}
 
 		// Strip the compression suffix
-		p := filepath.Join(opts.Directory, strings.TrimSuffix(opts.FileName, opts.Format.Name()))
+		p := filepath.Join(opts.Directory, strings.TrimSuffix(opts.FileName, opts.Format.Extension()))
 
 		// Make sure it's not ignored
 		if err := fs.IsIgnored(p); err != nil {
@@ -259,7 +257,7 @@ func (fs *Filesystem) extractStream(ctx context.Context, opts extractStreamOptio
 	}
 
 	// Decompress and extract archive
-	return ex.Extract(ctx, opts.Reader, nil, func(ctx context.Context, f archiver.File) error {
+	return ex.Extract(ctx, opts.Reader, func(ctx context.Context, f archives.FileInfo) error {
 		if f.IsDir() {
 			return nil
 		}
