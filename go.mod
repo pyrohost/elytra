@@ -38,7 +38,7 @@ require (
 	github.com/mholt/archives v0.1.0
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
 	github.com/patrickmn/go-cache v2.1.0+incompatible
-	github.com/pkg/sftp v1.13.7
+	github.com/pkg/sftp v1.13.8
 	github.com/sabhiram/go-gitignore v0.0.0-20210923224102-525f6e181f06
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
