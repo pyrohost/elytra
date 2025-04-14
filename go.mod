@@ -33,7 +33,7 @@ require (
 	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/compress v1.18.0
 	github.com/klauspost/pgzip v1.2.6
-	github.com/magiconair/properties v1.8.9
+	github.com/magiconair/properties v1.8.10
 	github.com/mattn/go-colorable v0.1.14
 	github.com/mholt/archives v0.1.1
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db
