@@ -2,6 +2,7 @@ package system
 
 import (
 	"context"
+	"math"
 	"runtime"
 
 	"github.com/acobaugh/osrelease"
@@ -9,6 +10,9 @@ import (
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/parsers/kernel"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 type Information struct {
@@ -47,15 +51,21 @@ type DockerRunc struct {
 }
 
 type System struct {
-	Architecture  string `json:"architecture"`
-	CPUThreads    int    `json:"cpu_threads"`
-	MemoryBytes   int64  `json:"memory_bytes"`
-	KernelVersion string `json:"kernel_version"`
-	OS            string `json:"os"`
-	OSType        string `json:"os_type"`
+	Architecture       string   `json:"architecture"`
+	CPUThreads         int      `json:"cpu_threads"`
+	CPUUsage           *float64 `json:"cpu_usage"`
+	MemoryBytes        int64    `json:"memory_bytes"`
+	MemoryBytesUsage   *uint64  `json:"memory_bytes_usage"`
+	MemoryPercentUsage *float64 `json:"memory_percent_usage"`
+	DiskBytes          *uint64  `json:"disk_bytes"`
+	DiskBytesUsage     *uint64  `json:"disk_bytes_usage"`
+	DiskPercentUsage   *float64 `json:"disk_percent_usage"`
+	KernelVersion      string   `json:"kernel_version"`
+	OS                 string   `json:"os"`
+	OSType             string   `json:"os_type"`
 }
 
-func GetSystemInformation() (*Information, error) {
+func GetSystemInformation(rootDirectoryPath string) (*Information, error) {
 	k, err := kernel.GetKernelVersion()
 	if err != nil {
 		return nil, err
@@ -89,6 +99,29 @@ func GetSystemInformation() (*Information, error) {
 		break
 	}
 
+	cpuUsage, err := cpu.Percent(0, false)
+	var cpuUsagePercent *float64
+	if err == nil && len(cpuUsage) > 0 {
+		v := math.Round(cpuUsage[0]*100) / 100
+		cpuUsagePercent = &v
+	}
+
+	memStats, err := mem.VirtualMemory()
+	var memPercentUsage *float64
+	var memBytesUsage *uint64
+	if err == nil {
+		v := math.Round(memStats.UsedPercent*100) / 100
+		memPercentUsage, memBytesUsage = &v, &memStats.Used
+	}
+
+	diskStats, err := disk.Usage(rootDirectoryPath)
+	var diskBytes, diskBytesUsage *uint64
+	var diskPercentUsage *float64
+	if err == nil {
+		diskBytes, diskBytesUsage = &diskStats.Total, &diskStats.Used
+		v := math.Round(diskStats.UsedPercent*100) / 100
+		diskPercentUsage = &v
+	}
 	return &Information{
 		Version: Version,
 		Docker: DockerInformation{
@@ -112,12 +145,18 @@ func GetSystemInformation() (*Information, error) {
 			},
 		},
 		System: System{
-			Architecture:  runtime.GOARCH,
-			CPUThreads:    runtime.NumCPU(),
-			MemoryBytes:   info.MemTotal,
-			KernelVersion: k.String(),
-			OS:            os,
-			OSType:        runtime.GOOS,
+			Architecture:       runtime.GOARCH,
+			CPUThreads:         runtime.NumCPU(),
+			CPUUsage:           cpuUsagePercent,
+			MemoryBytes:        info.MemTotal,
+			MemoryBytesUsage:   memBytesUsage,
+			MemoryPercentUsage: memPercentUsage,
+			DiskBytes:          diskBytes,
+			DiskBytesUsage:     diskBytesUsage,
+			DiskPercentUsage:   diskPercentUsage,
+			KernelVersion:      k.String(),
+			OS:                 os,
+			OSType:             runtime.GOOS,
 		},
 	}, nil
 }
