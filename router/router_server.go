@@ -261,3 +261,25 @@ func postServerDenyWSTokens(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
+
+// Remove all SFTP connections for a specific user.
+func deleteServerSFTPConnection(c *gin.Context) {
+	s := ExtractServer(c)
+
+	var data struct {
+		Username string `json:"username"`
+	}
+
+	if err := c.BindJSON(&data); err != nil {
+		return
+	}
+
+	if activeSessions := s.GetActiveSFTPConnections()[data.Username]; activeSessions != nil {
+		for _, session := range activeSessions {
+			session.Close()
+		}
+		s.RemoveActiveSFTPConnection(data.Username, nil)
+	}
+
+	c.Status(http.StatusNoContent)
+}

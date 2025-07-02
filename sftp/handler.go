@@ -33,6 +33,7 @@ type Handler struct {
 	permissions []string
 	logger      *log.Entry
 	ro          bool
+	username    string
 }
 
 // NewHandler returns a new connection handler for the SFTP server. This allows a given user
@@ -56,6 +57,7 @@ func NewHandler(sc *ssh.ServerConn, srv *server.Server) (*Handler, error) {
 		events:      &events,
 		ro:          config.Get().System.Sftp.ReadOnly,
 		logger:      log.WithFields(log.Fields{"subsystem": "sftp", "user": uuid, "ip": sc.RemoteAddr()}),
+		username:    sc.User(),
 	}, nil
 }
 
@@ -292,6 +294,7 @@ func (h *Handler) can(permission string) bool {
 	if h.server.IsSuspended() {
 		return false
 	}
+
 	for _, p := range h.permissions {
 		// If we match the permission specifically, or the user has been granted the "*"
 		// permission because they're an admin, let them through.

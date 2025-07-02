@@ -171,7 +171,10 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 			return errors.WithStackIf(err)
 		}
 		rs := sftp.NewRequestServer(channel, handler.Handlers())
+		srv.AddActiveSFTPConnection(sconn.Conn.User(), sconn)
+
 		if err := rs.Serve(); err == io.EOF {
+			srv.RemoveActiveSFTPConnection(sconn.Conn.User(), sconn)
 			_ = rs.Close()
 		}
 	}
