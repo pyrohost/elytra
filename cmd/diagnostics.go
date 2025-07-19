@@ -43,7 +43,6 @@ var diagnosticsArgs struct {
 	LogLines           int
 }
 
-// new helper: keeps protocol but redacts hostname
 func redactWithProtocol(input string) string {
 	if diagnosticsArgs.IncludeEndpoints {
 		return input
@@ -75,8 +74,7 @@ func newDiagnosticsCommand() *cobra.Command {
 // - relevant parts of daemon configuration
 // - the docker debug output
 // - running docker containers
-// - logs 
-
+// - logs
 func diagnosticsCmdRun(*cobra.Command, []string) {
 	questions := []*survey.Question{
 		{
@@ -124,16 +122,14 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 	if err := config.FromFile(config.DefaultLocation); err != nil {
 	}
 	cfg := config.Get()
-
-	// changed to preserve protocol, redact host
 	fmt.Fprintln(output, "      Panel Location:", redactWithProtocol(cfg.PanelLocation))
 	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "  Internal Webserver:", redactWithProtocol(cfg.Api.Host), ":", cfg.Api.Port)
+	fmt.Fprintln(output, "  Internal Webserver:", redact(cfg.Api.Host), ":", cfg.Api.Port)
 	fmt.Fprintln(output, "         SSL Enabled:", cfg.Api.Ssl.Enabled)
-	fmt.Fprintln(output, "     SSL Certificate:", redactWithProtocol(cfg.Api.Ssl.CertificateFile))
-	fmt.Fprintln(output, "             SSL Key:", redactWithProtocol(cfg.Api.Ssl.KeyFile))
+	fmt.Fprintln(output, "     SSL Certificate:", redact(cfg.Api.Ssl.CertificateFile))
+	fmt.Fprintln(output, "             SSL Key:", redact(cfg.Api.Ssl.KeyFile))
 	fmt.Fprintln(output, "")
-	fmt.Fprintln(output, "         SFTP Server:", redactWithProtocol(cfg.System.Sftp.Address), ":", cfg.System.Sftp.Port)
+	fmt.Fprintln(output, "         SFTP Server:", redact(cfg.System.Sftp.Address), ":", cfg.System.Sftp.Port)
 	fmt.Fprintln(output, "      SFTP Read-Only:", cfg.System.Sftp.ReadOnly)
 	fmt.Fprintln(output, "")
 	fmt.Fprintln(output, "      Root Directory:", cfg.System.RootDirectory)
@@ -194,6 +190,17 @@ func diagnosticsCmdRun(*cobra.Command, []string) {
 		fmt.Fprintln(output, "Logs redacted.")
 	}
 
+	if !diagnosticsArgs.IncludeEndpoints {
+		s := output.String()
+		output.Reset()
+		s = strings.ReplaceAll(s, cfg.PanelLocation, "{redacted}")
+		s = strings.ReplaceAll(s, cfg.Api.Host, "{redacted}")
+		s = strings.ReplaceAll(s, cfg.Api.Ssl.CertificateFile, "{redacted}")
+		s = strings.ReplaceAll(s, cfg.Api.Ssl.KeyFile, "{redacted}")
+		s = strings.ReplaceAll(s, cfg.System.Sftp.Address, "{redacted}")
+		output.WriteString(s)
+	}
+
 	fmt.Println("\n---------------  generated report  ---------------")
 	fmt.Println(output.String())
 	fmt.Print("---------------   end of report    ---------------\n\n")
@@ -251,6 +258,13 @@ func uploadToHastebin(hbUrl, content string) (string, error) {
 		return u.String(), nil
 	}
 	return "", errors.New("failed to find key in response")
+}
+
+func redact(s string) string {
+	if !diagnosticsArgs.IncludeEndpoints {
+		return "{redacted}"
+	}
+	return s
 }
 
 func printHeader(w io.Writer, title string) {
