@@ -87,6 +87,10 @@ func (h *Handler) Fileread(request *sftp.Request) (io.ReaderAt, error) {
 		}
 		return nil, sftp.ErrSSHFxNoSuchFile
 	}
+
+	if config.Get().System.ActivitySendSftpRead {
+		h.events.MustLog(server.ActivitySftpRead, FileAction{Entity: request.Filepath})
+	}
 	return f, nil
 }
 
