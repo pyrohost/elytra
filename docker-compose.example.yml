@@ -1,11 +1,11 @@
 version: '3.8'
 
 services:
-  wings:
-    image: ghcr.io/pterodactyl/wings:latest
+  elytra:
+    image: ghcr.io/pterodactyl/elytra:latest
     restart: always
     networks:
-      - wings0
+      - elytra0
     ports:
       - "8080:8080"
       - "2022:2022"
@@ -29,11 +29,11 @@ services:
       #- "/etc/letsencrypt/:/etc/letsencrypt/"
 
 networks:
-  wings0:
-    name: wings0
+  elytra0:
+    name: elytra0
     driver: bridge
     ipam:
       config:
         - subnet: "172.21.0.0/16"
     driver_opts:
-      com.docker.network.bridge.name: wings0
+      com.docker.network.bridge.name: elytra0

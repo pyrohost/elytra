@@ -1,8 +1,8 @@
-module github.com/pterodactyl/wings
+module github.com/pyrohost/elytra
 
 go 1.23.0
 
-toolchain go1.24.1
+toolchain go1.23.4
 
 require (
 	emperror.dev/errors v0.8.1
