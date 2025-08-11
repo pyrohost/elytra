@@ -47,7 +47,7 @@ func (ra RequestActivity) SetUser(u string) RequestActivity {
 	return c
 }
 
-func (s *Server) NewRequestActivity(user string, ip string) RequestActivity {
+func (s *Server) NewRequestActivity(user, ip string) RequestActivity {
 	return RequestActivity{server: s.ID(), user: user, ip: ip}
 }
 

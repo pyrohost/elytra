@@ -73,7 +73,7 @@ func (rfs *rootFs) CreateServerFile(p string, c []byte) error {
 	return err
 }
 
-func (rfs *rootFs) CreateServerFileFromString(p string, c string) error {
+func (rfs *rootFs) CreateServerFileFromString(p, c string) error {
 	return rfs.CreateServerFile(p, []byte(c))
 }
 
@@ -91,7 +91,7 @@ func TestFilesystem_Openfile(t *testing.T) {
 
 			g.Assert(err).IsNotNil()
 			// TODO
-			//g.Assert(IsErrorCode(err, ErrNotExist)).IsTrue()
+			// g.Assert(IsErrorCode(err, ErrNotExist)).IsTrue()
 		})
 
 		g.It("returns file stat information", func() {

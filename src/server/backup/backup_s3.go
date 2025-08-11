@@ -33,7 +33,7 @@ var _ BackupInterface = (*S3Backup)(nil)
 // NewS3 creates a new S3 backup instance.
 //
 // Deprecated: Use NewRusticS3 instead for better performance and features.
-func NewS3(client remote.Client, uuid string, ignore string) *S3Backup {
+func NewS3(client remote.Client, uuid, ignore string) *S3Backup {
 	return &S3Backup{
 		Backup{
 			client:  client,

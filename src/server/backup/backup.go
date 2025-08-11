@@ -28,8 +28,8 @@ var format = archives.CompressedArchive{
 type AdapterType string
 
 const (
-	LocalBackupAdapter      AdapterType = "elytra"
-	S3BackupAdapter         AdapterType = "s3"
+	LocalBackupAdapter       AdapterType = "elytra"
+	S3BackupAdapter          AdapterType = "s3"
 	RusticLocalBackupAdapter AdapterType = "rustic-local"
 	RusticS3BackupAdapter    AdapterType = "rustic-s3"
 )

@@ -126,7 +126,7 @@ func IsErrorCode(err error, code ErrorCode) bool {
 }
 
 // NewBadPathResolution returns a new BadPathResolution error.
-func NewBadPathResolution(path string, resolved string) error {
+func NewBadPathResolution(path, resolved string) error {
 	return errors.WithStackDepth(&Error{code: ErrCodePathResolution, path: path, resolved: resolved}, 1)
 }
 

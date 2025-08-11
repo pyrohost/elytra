@@ -188,7 +188,7 @@ func (fs *Filesystem) Write(p string, r io.Reader, newSize int64, mode ufs.FileM
 
 // CreateDirectory creates a new directory (name) at a specified path (p) for
 // the server.
-func (fs *Filesystem) CreateDirectory(name string, p string) error {
+func (fs *Filesystem) CreateDirectory(name, p string) error {
 	return fs.unixFS.MkdirAll(filepath.Join(p, name), 0o755)
 }
 

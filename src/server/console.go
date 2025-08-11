@@ -14,8 +14,10 @@ import (
 // appName is a local cache variable to avoid having to make expensive copies of
 // the configuration every time we need to send output along to the websocket for
 // a server.
-var appName string
-var appNameSync sync.Once
+var (
+	appName     string
+	appNameSync sync.Once
+)
 
 // PublishConsoleOutputFromDaemon sends output to the server console formatted
 // to appear correctly as being sent from Elytra.
