@@ -1,11 +1,12 @@
 package filesystem
 
 import (
-	"golang.org/x/sys/unix"
 	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
@@ -184,7 +185,7 @@ func (fs *Filesystem) DirectorySize(root string) (int64, error) {
 			return errors.Wrap(err, "lstatat err")
 		}
 
-		var sysFileInfo = info.Sys().(*unix.Stat_t)
+		sysFileInfo := info.Sys().(*unix.Stat_t)
 		if sysFileInfo.Nlink > 1 {
 			// Hard links have the same inode number
 			if slices.Contains(hardLinks, sysFileInfo.Ino) {

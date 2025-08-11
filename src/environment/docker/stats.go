@@ -119,7 +119,7 @@ func calculateDockerMemory(stats container.MemoryStats) uint64 {
 // by the defined CPU limits on the container.
 //
 // @see https://github.com/docker/cli/blob/aa097cf1aa19099da70930460250797c8920b709/cli/command/container/stats_helpers.go#L166
-func calculateDockerAbsoluteCpu(pStats container.CPUStats, stats container.CPUStats) float64 {
+func calculateDockerAbsoluteCpu(pStats, stats container.CPUStats) float64 {
 	// Calculate the change in CPU usage between the current and previous reading.
 	cpuDelta := float64(stats.CPUUsage.TotalUsage) - float64(pStats.CPUUsage.TotalUsage)
 

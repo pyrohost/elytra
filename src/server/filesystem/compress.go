@@ -96,7 +96,7 @@ func (fs *Filesystem) archiverFileSystem(ctx context.Context, p string) (iofs.FS
 
 // SpaceAvailableForDecompression looks through a given archive and determines
 // if decompressing it would put the server over its allocated disk space limit.
-func (fs *Filesystem) SpaceAvailableForDecompression(ctx context.Context, dir string, file string) error {
+func (fs *Filesystem) SpaceAvailableForDecompression(ctx context.Context, dir, file string) error {
 	// Don't waste time trying to determine this if we know the server will have the space for
 	// it since there is no limit.
 	if fs.MaxDisk() <= 0 {
@@ -139,7 +139,7 @@ func (fs *Filesystem) SpaceAvailableForDecompression(ctx context.Context, dir st
 // all the files within the given archive and ensure that there is not a
 // zip-slip attack being attempted by validating that the final path is within
 // the server data directory.
-func (fs *Filesystem) DecompressFile(ctx context.Context, dir string, file string) error {
+func (fs *Filesystem) DecompressFile(ctx context.Context, dir, file string) error {
 	f, err := fs.unixFS.Open(filepath.Join(dir, file))
 	if err != nil {
 		return err

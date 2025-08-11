@@ -28,7 +28,7 @@ var _ BackupInterface = (*LocalBackup)(nil)
 // NewLocal creates a new local backup instance.
 //
 // Deprecated: Use NewRusticLocal instead for better performance and features.
-func NewLocal(client remote.Client, uuid string, ignore string) *LocalBackup {
+func NewLocal(client remote.Client, uuid, ignore string) *LocalBackup {
 	return &LocalBackup{
 		Backup{
 			client:  client,

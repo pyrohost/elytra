@@ -544,7 +544,7 @@ func (fs *UnixFS) fstat(name string, flags int) (FileInfo, error) {
 	return fs._fstat("fstat", name, flags)
 }
 
-func (fs *UnixFS) _fstat(op string, name string, flags int) (FileInfo, error) {
+func (fs *UnixFS) _fstat(op, name string, flags int) (FileInfo, error) {
 	dirfd, name, closeFd, err := fs.safePath(name)
 	defer closeFd()
 	if err != nil {

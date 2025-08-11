@@ -130,7 +130,7 @@ func postServerRestoreBackup(c *gin.Context) {
 		hasError = false
 		c.Status(http.StatusAccepted)
 		return
-		
+
 	case backup.RusticLocalBackupAdapter:
 		b, err := backup.LocateRusticLocal(client, c.Param("backup"))
 		if err != nil {
@@ -150,7 +150,7 @@ func postServerRestoreBackup(c *gin.Context) {
 		hasError = false
 		c.Status(http.StatusAccepted)
 		return
-		
+
 	case backup.RusticS3BackupAdapter:
 		b, err := backup.LocateRusticS3(client, c.Param("backup"))
 		if err != nil {
@@ -223,29 +223,29 @@ func postServerRestoreBackup(c *gin.Context) {
 func deleteServerBackup(c *gin.Context) {
 	client := middleware.ExtractApiClient(c)
 	backupUuid := c.Param("backup")
-	
+
 	// Try to locate the backup using different adapters
 	var b backup.BackupInterface
 	var err error
-	
+
 	// First try local backup
 	b, _, err = backup.LocateLocal(client, backupUuid)
 	if err == nil {
 		goto deleteBackup
 	}
-	
+
 	// Try rustic local backup
 	b, err = backup.LocateRusticLocal(client, backupUuid)
 	if err == nil {
 		goto deleteBackup
 	}
-	
+
 	// Try rustic S3 backup
 	b, err = backup.LocateRusticS3(client, backupUuid)
 	if err == nil {
 		goto deleteBackup
 	}
-	
+
 	// If we get here, backup was not found with any adapter
 	if errors.Is(err, os.ErrNotExist) {
 		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
@@ -255,7 +255,7 @@ func deleteServerBackup(c *gin.Context) {
 	}
 	middleware.CaptureAndAbort(c, err)
 	return
-	
+
 deleteBackup:
 	// I'm not entirely sure how likely this is to happen, however if we did manage to
 	// locate the backup previously and it is now missing when we go to delete, just
