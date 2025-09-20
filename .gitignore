@@ -38,6 +38,7 @@
 # The built executable
 elytra
 elytra.exe
+!elytra/
 
 # IDE/Editor files (VS Code)
 /.vscode
