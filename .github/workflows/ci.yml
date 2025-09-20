@@ -5,8 +5,6 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  release:
-    types: [published]
 
 permissions:
   contents: read
@@ -31,16 +29,7 @@ jobs:
         run: make download-rustic
 
       - name: Run tests
-        run: go test -race -coverprofile=coverage.out ./...
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        if: always()
-        with:
-          file: ./coverage.out
-          fail_ci_if_error: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: go test -race ./...
 
   build:
     name: Build
@@ -82,8 +71,8 @@ jobs:
           retention-days: 7
           compression-level: 0
 
-  docker-dev:
-    name: Docker (dev)
+  docker:
+    name: Docker
     runs-on: ubuntu-latest
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -113,8 +102,8 @@ jobs:
         with:
           images: ghcr.io/pyrohost/elytra
           tags: |
-            type=ref,event=branch,suffix=-dev
-            type=sha,prefix={{branch}}-dev-
+            type=sha,format=short
+            type=raw,value=dev,enable={{is_default_branch}}
 
       - name: Build and push
         uses: docker/build-push-action@v6
