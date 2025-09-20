@@ -17,17 +17,36 @@
 
       imports = [
         inputs.treefmt-nix.flakeModule
+        inputs.flake-parts.flakeModules.easyOverlay
       ];
 
-      perSystem = {system, ...}: let
+      perSystem = {
+        system,
+        config,
+        ...
+      }: let
         pkgs = import inputs.nixpkgs {inherit system;};
       in {
-         devShells.default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            go_1_24
+            go
             gofumpt
             golangci-lint
             gotools
+            config.treefmt.build.wrapper
+          ];
+        };
+
+        packages.elytra = pkgs.buildGoModule rec {
+          pname = "elytra";
+          version = inputs.self.rev or "dirty";
+          src = inputs.self;
+          vendorHash = "sha256-DX3HHTFV9hObfBdMfdBCoZAsyibS+BSRlbWzLgjYMbo=";
+          ldflags = [
+            "-s"
+            "-w"
+            "-X"
+            "github.com/pyrohost/elytra/system.Version=${version}"
           ];
         };
 
