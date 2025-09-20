@@ -2,17 +2,18 @@
 FROM golang:1.23.7-alpine AS builder
 
 ARG VERSION
-RUN apk add --update --no-cache git make mailcap
+RUN apk add --update --no-cache git make mailcap curl bash
 WORKDIR /app/
 COPY go.mod go.sum /app/
 RUN go mod download
 COPY . /app/
+RUN make download-rustic
 RUN CGO_ENABLED=0 go build \
-    -ldflags="-s -w -X github.com/pterodactyl/wings/system.Version=$VERSION" \
+    -ldflags="-s -w -X github.com/pyrohost/elytra/src/system.Version=$VERSION" \
     -v \
     -trimpath \
-    -o wings \
-    wings.go
+    -o elytra \
+    ./src/cmd/elytra
 RUN echo "ID=\"distroless\"" > /etc/os-release
 
 # Stage 2 (Final)
@@ -20,9 +21,9 @@ FROM gcr.io/distroless/static:latest
 COPY --from=builder /etc/os-release /etc/os-release
 COPY --from=builder /etc/mime.types /etc/mime.types
 
-COPY --from=builder /app/wings /usr/bin/
+COPY --from=builder /app/elytra /usr/bin/
 
-ENTRYPOINT ["/usr/bin/wings"]
-CMD ["--config", "/etc/pterodactyl/config.yml"]
+ENTRYPOINT ["/usr/bin/elytra"]
+CMD ["--config", "/etc/elytra/config.yml"]
 
 EXPOSE 8080 2022

@@ -36,14 +36,17 @@
 /coverage.out
 
 # The built executable
-wings
-wings.exe
+elytra
+elytra.exe
 
 # IDE/Editor files (VS Code)
 /.vscode
 
 # test files
 test_*/
+
+# Embedded rustic binaries (downloaded at build time)
+/internal/rustic/binaries/rustic-*
 
 # Keep all gitkeep files (This needs to stay at the bottom)
 !.gitkeep

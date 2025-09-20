@@ -1,27 +1,27 @@
 version: '3.8'
 
 services:
-  wings:
-    image: ghcr.io/pterodactyl/wings:latest
+  elytra:
+    image: ghcr.io/pyrohost/elytra:latest
     restart: always
     networks:
-      - wings0
+      - elytra0
     ports:
       - "8080:8080"
       - "2022:2022"
     tty: true
     environment:
       TZ: "UTC"
-      WINGS_UID: 988
-      WINGS_GID: 988
-      WINGS_USERNAME: pterodactyl
+      ELYTRA_UID: 988
+      ELYTRA_GID: 988
+      ELYTRA_USERNAME: pyrodactyl
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - "/var/lib/docker/containers/:/var/lib/docker/containers/"
-      - "/etc/pterodactyl/:/etc/pterodactyl/"
-      - "/var/lib/pterodactyl/:/var/lib/pterodactyl/"
-      - "/var/log/pterodactyl/:/var/log/pterodactyl/"
-      - "/tmp/pterodactyl/:/tmp/pterodactyl/"
+      - "/etc/elytra/:/etc/elytra/"
+      - "/var/lib/elytra/:/var/lib/elytra/"
+      - "/var/log/elytra/:/var/log/elytra/"
+      - "/tmp/elytra/:/tmp/elytra/"
       - "/etc/ssl/certs:/etc/ssl/certs:ro"
       # you may need /srv/daemon-data if you are upgrading from an old daemon
       #- "/srv/daemon-data/:/srv/daemon-data/"
@@ -29,11 +29,11 @@ services:
       #- "/etc/letsencrypt/:/etc/letsencrypt/"
 
 networks:
-  wings0:
-    name: wings0
+  elytra0:
+    name: elytra0
     driver: bridge
     ipam:
       config:
         - subnet: "172.21.0.0/16"
     driver_opts:
-      com.docker.network.bridge.name: wings0
+      com.docker.network.bridge.name: elytra0
