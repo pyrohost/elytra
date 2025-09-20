@@ -25,6 +25,9 @@ jobs:
           cache: true
           check-latest: true
 
+      - name: Download dependencies
+        run: go mod download
+
       - name: Download rustic binaries
         run: make download-rustic
 
@@ -33,6 +36,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
+          mkdir -p dist
 
           # Build for multiple platforms
           for GOOS in linux; do
@@ -73,6 +77,11 @@ jobs:
   docker:
     name: Docker Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/checkout@v4
 
