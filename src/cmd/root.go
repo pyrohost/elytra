@@ -130,11 +130,23 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	// Initialize embedded rustic binary for backup functionality
 	if rustic.IsAvailable() {
-		log.WithField("platforms", rustic.GetSupportedPlatforms()).Info("rustic backup functionality is available with bundled binary")
+		log.Info("rustic backup functionality is available")
 	} else {
-		log.Warn("rustic backup functionality is not available for this platform")
+		cfg := config.Get().System.Backups.Rustic
+		rusticEnabled := cfg.Local.Enabled || cfg.S3.Enabled
+
+		if cfg.BinaryPath != "" && cfg.BinaryPath != "rustic" {
+			log.WithField("binary_path", cfg.BinaryPath).Fatal("rustic binary not found at configured path, but Elytra is configured to use rustic backups")
+			return
+		}
+
+		if rusticEnabled {
+			log.Fatal("rustic backups are enabled in configuration but rustic binary is not available in PATH")
+			return
+		}
+
+		log.Warn("rustic not found in PATH - rustic backup functionality will not be available")
 	}
 
 	t := config.Get().Token
@@ -284,8 +296,6 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		for _, s := range manager.All() {
 			s.CtxCancel()
 		}
-		// Cleanup any extracted rustic binaries
-		rustic.CleanupExtractedBinary()
 	}()
 
 	if s, err := cron.Scheduler(cmd.Context(), manager); err != nil {

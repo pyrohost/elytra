@@ -19,12 +19,12 @@ GO_VERSION = 1.24.1
 LDFLAGS = -s -w -X github.com/pyrohost/elytra/src/system.Version=$(VERSION)
 BUILD_FLAGS = -v -trimpath -ldflags="$(LDFLAGS)"
 
-build: generate ## Build binary for current platform
+build: ## Build binary for current platform
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=0 go build $(BUILD_FLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./src/cmd/elytra
 
-build-all: generate ## Build binaries for all supported platforms
+build-all: ## Build binaries for all supported platforms
 	@echo "Building $(BINARY_NAME) $(VERSION) for all platforms..."
 	@mkdir -p $(BUILD_DIR)
 	@for GOOS in linux; do \
@@ -36,23 +36,19 @@ build-all: generate ## Build binaries for all supported platforms
 	done
 	@echo "Build complete!"
 
-test: generate ## Run tests
+test: ## Run tests
 	@echo "Running tests..."
 	go test -race -cover ./...
 
-debug: generate ## Build and run in debug mode
+debug: ## Build and run in debug mode
 	go build -ldflags="-X github.com/pyrohost/elytra/src/system.Version=$(VERSION)" -o elytra ./src/cmd/elytra
 	sudo ./elytra --debug --ignore-certificate-errors --config config.yml --pprof --pprof-block-rate 1
 
 # Runs a remotely debuggable session for Elytra allowing an IDE to connect and target
 # different breakpoints.
-rmdebug: generate ## Run with remote debugger
+rmdebug: ## Run with remote debugger
 	go build -gcflags "all=-N -l" -ldflags="-X github.com/pyrohost/elytra/src/system.Version=$(VERSION)" -race -o elytra ./src/cmd/elytra
 	sudo dlv --listen=:2345 --headless=true --api-version=2 --accept-multiclient exec ./elytra -- --debug --ignore-certificate-errors --config config.yml
-
-release: ## Create a new release (interactive)
-	@echo "Creating a new release..."
-	./scripts/release.sh
 
 dev: build ## Build and run in development mode
 	@echo "Starting $(BINARY_NAME) in development mode..."
@@ -90,19 +86,9 @@ info: ## Show build information
 	@echo "  Git Commit:  $(shell git rev-parse HEAD)"
 	@echo "  Git Branch:  $(shell git rev-parse --abbrev-ref HEAD)"
 
-# Download rustic binaries for embedding
-download-rustic:
-	@echo "Downloading rustic binaries for embedding..."
-	./scripts/download-rustic.sh
-
-# Generate embedded assets
-generate: download-rustic
-	@echo "Generating embedded assets..."
-	go generate ./src/internal/rustic/...
 
 clean: ## Clean build artifacts
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR)/*
-	rm -rf src/internal/rustic/binaries/rustic-*
 
-.PHONY: help build build-all test debug rmdebug release dev docker fmt lint deps info download-rustic generate clean
+.PHONY: help build build-all test debug rmdebug dev docker fmt lint deps info clean

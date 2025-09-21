@@ -276,7 +276,7 @@ type Backups struct {
 
 // RusticConfiguration defines the configuration for rustic backup repositories
 type RusticConfiguration struct {
-	// The binary path for the rustic executable (fallback if bundled binary is unavailable)
+	// The binary path for the rustic executable
 	BinaryPath string `default:"rustic" yaml:"binary_path"`
 
 	// Local repository configuration

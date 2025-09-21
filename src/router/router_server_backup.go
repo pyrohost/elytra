@@ -9,6 +9,7 @@ import (
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
+	"github.com/pyrohost/elytra/src/internal/rustic"
 	"github.com/pyrohost/elytra/src/router/middleware"
 	"github.com/pyrohost/elytra/src/server"
 	"github.com/pyrohost/elytra/src/server/backup"
@@ -24,6 +25,10 @@ func validateRusticAdapter(adapter backup.BackupInterface) error {
 	// Validate that we have required configuration
 	if rusticBackup.Identifier() == "" {
 		return errors.New("backup UUID is required")
+	}
+
+	if !rustic.IsAvailable() {
+		return errors.New("rustic binary is not available - cannot perform rustic backup operations")
 	}
 
 	return nil

@@ -524,12 +524,12 @@ func (r *RusticBackup) getRepositoryPath() string {
 func (r *RusticBackup) buildRusticCommandWithContext(ctx context.Context, args ...string) *exec.Cmd {
 	cfg := config.Get().System.Backups.Rustic
 
-	// Try to use embedded binary first, fall back to configured path
+	// Try to use rustic from PATH first, fall back to configured path
 	binaryPath := cfg.BinaryPath
-	if embeddedPath, err := rustic.GetBinaryPath(); err == nil {
-		binaryPath = embeddedPath
+	if systemPath, err := rustic.GetBinaryPath(); err == nil {
+		binaryPath = systemPath
 	} else {
-		r.log().WithField("error", err).Debug("failed to get embedded rustic binary, using configured path")
+		r.log().WithField("error", err).Debug("rustic not found in PATH, using configured path")
 	}
 
 	cmd := exec.CommandContext(ctx, binaryPath, args...)
