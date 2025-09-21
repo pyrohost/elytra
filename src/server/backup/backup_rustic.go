@@ -456,7 +456,7 @@ func (r *RusticBackup) initializeRepository(ctx context.Context) error {
 
 	// Create repository directory for local repositories
 	if r.backupType == "local" {
-		if err := os.MkdirAll(filepath.Dir(r.repositoryPath), secureTempDirMode); err != nil {
+		if err := os.MkdirAll(r.repositoryPath, secureTempDirMode); err != nil {
 			return errors.Wrap(err, "rustic: failed to create repository directory")
 		}
 	}
@@ -762,14 +762,22 @@ func (r *RusticBackup) validateRepositoryPath(repoPath string) error {
 
 	// For local repositories, validate the path
 	if r.backupType == "local" {
-		// Check for directory traversal
-		if strings.Contains(repoPath, "..") {
-			return errors.New("repository path contains directory traversal")
+		cfg := config.Get().System.Backups.Rustic.Local
+
+		// Clean and resolve both paths to handle symlinks and relative paths
+		cleanRepo, err := filepath.Abs(filepath.Clean(repoPath))
+		if err != nil {
+			return errors.New("invalid repository path")
 		}
 
-		// Ensure it's within allowed directory structure
-		cfg := config.Get().System.Backups.Rustic.Local
-		if !strings.HasPrefix(repoPath, cfg.RepositoryPath) {
+		cleanBase, err := filepath.Abs(filepath.Clean(cfg.RepositoryPath))
+		if err != nil {
+			return errors.New("invalid base repository path")
+		}
+
+		// Check if cleanRepo is within cleanBase using relative path calculation
+		relPath, err := filepath.Rel(cleanBase, cleanRepo)
+		if err != nil || strings.HasPrefix(relPath, "..") || relPath == ".." {
 			return errors.New("repository path outside allowed directory")
 		}
 	}
