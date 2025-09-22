@@ -341,8 +341,8 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	}
 
 	// Initialize job manager for async operations
-	jobManager := jobs.NewManager(4) // 4 worker threads
-	jobManager.SetClient(pclient)     // Set client for Panel notifications
+	jobManager := jobs.NewManager(4)     // 4 worker threads
+	jobManager.SetClient(pclient)        // Set client for Panel notifications
 	jobManager.SetServerManager(manager) // Set server manager for WebSocket events
 
 	// Register all job types
