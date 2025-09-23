@@ -213,6 +213,16 @@ func (c *client) DeleteBackup(ctx context.Context, backup string) error {
 	return nil
 }
 
+// UpdateBackupSizes sends recalculated backup sizes to the Panel after deduplication changes
+func (c *client) UpdateBackupSizes(ctx context.Context, data RecalculatedBackupSizesRequest) error {
+	resp, err := c.Post(ctx, fmt.Sprintf("/servers/%s/backup-sizes", data.ServerUuid), data)
+	if err != nil {
+		return errors.WithStackIf(err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
 // getServersPaged returns a subset of servers from the Panel API using the
 // pagination query parameters.
 func (c *client) getServersPaged(ctx context.Context, page, limit int) ([]RawServerData, Pagination, error) {

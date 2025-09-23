@@ -35,6 +35,7 @@ type Client interface {
 	ValidateSftpCredentials(ctx context.Context, request SftpAuthRequest) (SftpAuthResponse, error)
 	SendActivityLogs(ctx context.Context, activity []models.Activity) error
 	DeleteBackup(ctx context.Context, backup string) error
+	UpdateBackupSizes(ctx context.Context, data RecalculatedBackupSizesRequest) error
 }
 
 type client struct {

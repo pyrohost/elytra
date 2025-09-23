@@ -90,6 +90,27 @@ type RusticGroupMetadata struct {
 // Format: [ [GroupMetadata, [Snapshot, ...]], ... ]
 type RusticSnapshotGroup [2]any // [0] = GroupMetadata, [1] = []Snapshot
 
+// RusticRepoInfo represents repository information from rustic repoinfo JSON output
+type RusticRepoInfo struct {
+	Index struct {
+		Blobs []struct {
+			BlobType string `json:"blob_type"`
+			Count    int    `json:"count"`
+			Size     int64  `json:"size"`
+			DataSize int64  `json:"data_size"`
+		} `json:"blobs"`
+	} `json:"index"`
+}
+
+// GetTotalDataSize returns the total data size from all blobs
+func (r *RusticRepoInfo) GetTotalDataSize() int64 {
+	var totalSize int64
+	for _, blob := range r.Index.Blobs {
+		totalSize += blob.DataSize
+	}
+	return totalSize
+}
+
 var _ BackupInterface = (*RusticBackup)(nil)
 
 // LocateRustic finds a rustic backup by snapshot ID and returns a backup instance
@@ -233,6 +254,12 @@ func (r *RusticBackup) Remove() error {
 	r.log().WithField("output", string(output)).
 		WithField("snapshot_id", r.snapshotID).
 		Info("rustic snapshot removed successfully")
+
+	// Recalculate backup sizes for remaining snapshots to account for deduplication
+	if err := r.recalculateBackupSizes(ctx); err != nil {
+		r.log().WithError(err).Warn("failed to recalculate backup sizes after deletion")
+		// Don't fail the removal operation if size recalculation fails
+	}
 
 	return nil
 }
@@ -976,4 +1003,155 @@ func (r *RusticBackup) cleanup() {
 		}
 		r.credentialFile = ""
 	}
+}
+
+// recalculateBackupSizes recalculates and updates backup sizes after a deletion to account for deduplication
+func (r *RusticBackup) recalculateBackupSizes(ctx context.Context) error {
+	if r.serverUuid == "" {
+		r.log().Debug("no server UUID available for size recalculation, skipping")
+		return nil
+	}
+
+	r.log().Info("recalculating backup sizes after deletion to account for deduplication")
+
+	// Get repository information to understand total data usage
+	repoInfo, err := r.getRepositoryInfo(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get repository information")
+	}
+
+	// Get all snapshots for this server
+	snapshots, err := r.getAllServerSnapshots(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to get all server snapshots")
+	}
+
+	if len(snapshots) == 0 {
+		r.log().Info("no snapshots remaining, skipping size recalculation")
+		return nil
+	}
+
+	// Calculate new sizes based on repository usage
+	recalculatedSizes := r.calculateSnapshotSizes(snapshots, repoInfo)
+
+	if len(recalculatedSizes) == 0 {
+		r.log().Info("no backup sizes to update")
+		return nil
+	}
+
+	// Send updates to the panel
+	updateRequest := remote.RecalculatedBackupSizesRequest{
+		ServerUuid: r.serverUuid,
+		Backups:    recalculatedSizes,
+	}
+
+	if err := r.client.UpdateBackupSizes(ctx, updateRequest); err != nil {
+		return errors.Wrap(err, "failed to send size updates to panel")
+	}
+
+	r.log().WithField("updated_backups", len(recalculatedSizes)).
+		Info("successfully updated backup sizes on panel")
+
+	return nil
+}
+
+// getRepositoryInfo gets repository information including total data usage
+func (r *RusticBackup) getRepositoryInfo(ctx context.Context) (*RusticRepoInfo, error) {
+	cmd := r.buildRusticCommandWithContext(ctx, "repoinfo", "--json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, errors.Wrap(err, "rustic repoinfo command failed")
+	}
+
+	var repoInfo RusticRepoInfo
+	if err := json.Unmarshal(output, &repoInfo); err != nil {
+		return nil, errors.Wrap(err, "failed to parse repository info JSON")
+	}
+
+	return &repoInfo, nil
+}
+
+// getAllServerSnapshots gets all snapshots for the current server
+func (r *RusticBackup) getAllServerSnapshots(ctx context.Context) ([]RusticSnapshotInfo, error) {
+	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", "--filter-host", r.serverUuid)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, errors.Wrap(err, "rustic snapshots command failed")
+	}
+
+	// Parse grouped snapshot results
+	var results []struct {
+		GroupKey  json.RawMessage      `json:"group_key"`
+		Snapshots []RusticSnapshotInfo `json:"snapshots"`
+	}
+	if err := json.Unmarshal(output, &results); err != nil {
+		return nil, errors.Wrap(err, "failed to parse snapshots JSON")
+	}
+
+	var allSnapshots []RusticSnapshotInfo
+	for _, result := range results {
+		allSnapshots = append(allSnapshots, result.Snapshots...)
+	}
+
+	return allSnapshots, nil
+}
+
+// calculateSnapshotSizes calculates proportional sizes for snapshots based on repository usage
+func (r *RusticBackup) calculateSnapshotSizes(snapshots []RusticSnapshotInfo, repoInfo *RusticRepoInfo) []remote.BackupSizeRecalculation {
+	var recalculatedSizes []remote.BackupSizeRecalculation
+
+	// Calculate total data added across all snapshots
+	var totalDataAdded int64
+	snapshotDataMap := make(map[string]int64)
+
+	for _, snapshot := range snapshots {
+		if snapshot.Summary != nil && snapshot.Summary.DataAdded > 0 {
+			totalDataAdded += snapshot.Summary.DataAdded
+			snapshotDataMap[snapshot.ID] = snapshot.Summary.DataAdded
+		}
+	}
+
+	totalRepoDataSize := repoInfo.GetTotalDataSize()
+	if totalDataAdded == 0 || totalRepoDataSize == 0 {
+		r.log().Debug("no data to redistribute among snapshots")
+		return recalculatedSizes
+	}
+
+	// Redistribute repository data proportionally based on original contribution
+	for _, snapshot := range snapshots {
+		// Extract backup UUID from tags
+		backupUuid := r.extractBackupUuidFromTags(snapshot.Tags)
+		if backupUuid == "" {
+			continue
+		}
+
+		originalDataAdded, exists := snapshotDataMap[snapshot.ID]
+		if !exists || originalDataAdded == 0 {
+			continue
+		}
+
+		// Calculate proportional size: (snapshot's original contribution / total original) * actual repository size
+		proportionalSize := int64(float64(originalDataAdded) / float64(totalDataAdded) * float64(totalRepoDataSize))
+
+		// Ensure minimum size (avoid zero-sized backups)
+		proportionalSize = max(proportionalSize, 1024) // 1KB minimum
+
+		recalculatedSizes = append(recalculatedSizes, remote.BackupSizeRecalculation{
+			BackupUuid: backupUuid,
+			NewSize:    proportionalSize,
+		})
+	}
+
+	return recalculatedSizes
+}
+
+// extractBackupUuidFromTags extracts the backup UUID from snapshot tags
+func (r *RusticBackup) extractBackupUuidFromTags(tags []string) string {
+	const backupUuidPrefix = "backup_uuid:"
+	for _, tag := range tags {
+		if uuid, found := strings.CutPrefix(tag, backupUuidPrefix); found {
+			return uuid
+		}
+	}
+	return ""
 }

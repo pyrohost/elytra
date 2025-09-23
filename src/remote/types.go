@@ -197,3 +197,15 @@ type InstallStatusRequest struct {
 	Successful bool `json:"successful"`
 	Reinstall  bool `json:"reinstall"`
 }
+
+// BackupSizeRecalculation represents backup size updates after deduplication recalculation
+type BackupSizeRecalculation struct {
+	BackupUuid string `json:"backup_uuid"`
+	NewSize    int64  `json:"new_size"`
+}
+
+// RecalculatedBackupSizesRequest contains updated backup sizes after repository deduplication
+type RecalculatedBackupSizesRequest struct {
+	ServerUuid string                    `json:"server_uuid"`
+	Backups    []BackupSizeRecalculation `json:"backups"`
+}
