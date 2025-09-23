@@ -1146,7 +1146,7 @@ func (r *RusticBackup) getRepositoryInfo(ctx context.Context) (*RusticRepoInfo, 
 
 // getAllServerSnapshots gets all snapshots for the current server
 func (r *RusticBackup) getAllServerSnapshots(ctx context.Context) ([]RusticSnapshotInfo, error) {
-	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", "--filter-host", r.serverUuid)
+	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, errors.Wrap(err, "rustic snapshots command failed")
@@ -1166,7 +1166,14 @@ func (r *RusticBackup) getAllServerSnapshots(ctx context.Context) ([]RusticSnaps
 		allSnapshots = append(allSnapshots, result.Snapshots...)
 	}
 
-	return allSnapshots, nil
+	var serverSnapshots []RusticSnapshotInfo
+	for _, snapshot := range allSnapshots {
+		if r.extractBackupUuidFromTags(snapshot.Tags) != "" {
+			serverSnapshots = append(serverSnapshots, snapshot)
+		}
+	}
+
+	return serverSnapshots, nil
 }
 
 // calculateSnapshotSizes calculates proportional sizes for snapshots based on repository usage
