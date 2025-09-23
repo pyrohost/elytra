@@ -265,6 +265,7 @@ func postServerRestoreBackup(c *gin.Context) {
 func deleteServerBackup(c *gin.Context) {
 	client := middleware.ExtractApiClient(c)
 	s := middleware.ExtractServer(c)
+	logger := middleware.ExtractLogger(c)
 	backupUuid := c.Param("backup")
 
 	// First try to locate as a local backup
@@ -306,6 +307,18 @@ func deleteServerBackup(c *gin.Context) {
 			c.Status(http.StatusNoContent)
 			return
 		}
+	}
+
+	// Try normal S3 backup
+	s3Backup := backup.NewS3(client, backupUuid, "")
+	if err := s3Backup.Remove(); err != nil {
+		// If S3 backup deletion fails, it might not be an S3 backup or there was an error
+		// Log the error but continue to 404 since backup wasn't found
+		logger.WithField("backup_uuid", backupUuid).WithError(err).Debug("failed to delete as S3 backup")
+	} else {
+		// S3 backup successfully deleted
+		c.Status(http.StatusNoContent)
+		return
 	}
 
 	// No backup found with the given UUID

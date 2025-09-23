@@ -203,6 +203,16 @@ func (c *client) SendActivityLogs(ctx context.Context, activity []models.Activit
 	return nil
 }
 
+// DeleteBackup requests the Panel to delete a backup from storage.
+func (c *client) DeleteBackup(ctx context.Context, backup string) error {
+	resp, err := c.request(ctx, "DELETE", fmt.Sprintf("/backups/%s", backup), nil)
+	if err != nil {
+		return errors.WithStackIf(err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
 // getServersPaged returns a subset of servers from the Panel API using the
 // pagination query parameters.
 func (c *client) getServersPaged(ctx context.Context, page, limit int) ([]RawServerData, Pagination, error) {

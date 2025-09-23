@@ -36,9 +36,26 @@ func NewS3(client remote.Client, uuid string, ignore string) *S3Backup {
 	}
 }
 
-// Remove removes a backup from the system.
+// Remove removes a backup from the system by requesting the Panel to delete it from S3.
 func (s *S3Backup) Remove() error {
-	return os.Remove(s.Path())
+	if s.client == nil {
+		return errors.New("backup: no API client available for S3 backup deletion")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*2)
+	defer cancel()
+
+	// Request the Panel to delete the backup from S3 storage
+	if err := s.client.DeleteBackup(ctx, s.Uuid); err != nil {
+		return errors.Wrap(err, "backup: failed to delete S3 backup via Panel API")
+	}
+
+	// Also clean up any local temporary file if it exists
+	if _, err := os.Stat(s.Path()); err == nil {
+		_ = os.Remove(s.Path())
+	}
+
+	return nil
 }
 
 // WithLogContext attaches additional context to the log output for this backup.
