@@ -402,7 +402,7 @@ func (r *RusticBackup) Path() string {
 	return fmt.Sprintf("%s/snapshot-%s", r.repositoryPath, r.snapshotID)
 }
 
-// Size returns the size of the backup
+// Size returns the size of the backup accounting for deduplication
 func (r *RusticBackup) Size() (int64, error) {
 	if r.snapshotID == "" {
 		return 0, errors.New("rustic: no snapshot ID available")
@@ -417,6 +417,19 @@ func (r *RusticBackup) Size() (int64, error) {
 	defer cancel()
 	defer r.cleanup()
 
+	// Get the proportional size based on repository deduplication
+	size, err := r.calculateProportionalSize(ctx)
+	if err != nil {
+		// Fallback to DataAdded if proportional calculation fails
+		r.log().WithError(err).Debug("failed to calculate proportional size, falling back to DataAdded")
+		return r.getSnapshotDataAdded(ctx)
+	}
+
+	return size, nil
+}
+
+// getSnapshotDataAdded returns the raw DataAdded value for backward compatibility
+func (r *RusticBackup) getSnapshotDataAdded(ctx context.Context) (int64, error) {
 	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", r.snapshotID)
 	output, err := cmd.Output()
 	if err != nil {
@@ -440,6 +453,66 @@ func (r *RusticBackup) Size() (int64, error) {
 	}
 
 	return 0, errors.New("rustic: snapshot not found or size unavailable")
+}
+
+// calculateProportionalSize calculates the proportional size of this backup based on repository deduplication
+func (r *RusticBackup) calculateProportionalSize(ctx context.Context) (int64, error) {
+	if r.serverUuid == "" {
+		return 0, errors.New("rustic: server UUID required for proportional size calculation")
+	}
+
+	// Get repository information
+	repoInfo, err := r.getRepositoryInfo(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get repository information for size calculation")
+	}
+
+	// Get all snapshots for this server
+	snapshots, err := r.getAllServerSnapshots(ctx)
+	if err != nil {
+		return 0, errors.Wrap(err, "failed to get all server snapshots for size calculation")
+	}
+
+	if len(snapshots) == 0 {
+		return 0, errors.New("no snapshots found for proportional size calculation")
+	}
+
+	// Find our snapshot and calculate proportional size
+	var ourSnapshot *RusticSnapshotInfo
+	var totalDataAdded int64
+
+	for _, snapshot := range snapshots {
+		if snapshot.Summary != nil && snapshot.Summary.DataAdded > 0 {
+			totalDataAdded += snapshot.Summary.DataAdded
+		}
+
+		// Check if this is our snapshot
+		if snapshot.ID == r.snapshotID ||
+			(len(r.snapshotID) == 8 && strings.HasPrefix(snapshot.ID, r.snapshotID)) {
+			ourSnapshot = &snapshot
+		}
+	}
+
+	if ourSnapshot == nil {
+		return 0, errors.New("current snapshot not found in server snapshots")
+	}
+
+	if ourSnapshot.Summary == nil || ourSnapshot.Summary.DataAdded == 0 {
+		return 1024, nil // Return minimum size for empty snapshots
+	}
+
+	totalRepoDataSize := repoInfo.GetTotalDataSize()
+	if totalDataAdded == 0 || totalRepoDataSize == 0 {
+		return ourSnapshot.Summary.DataAdded, nil // Fallback to original size
+	}
+
+	// Calculate proportional size: (this snapshot's original contribution / total original) * actual repository size
+	proportionalSize := int64(float64(ourSnapshot.Summary.DataAdded) / float64(totalDataAdded) * float64(totalRepoDataSize))
+
+	// Ensure minimum size (avoid zero-sized backups)
+	proportionalSize = max(proportionalSize, 1024) // 1KB minimum
+
+	return proportionalSize, nil
 }
 
 // Checksum returns a checksum for the backup
