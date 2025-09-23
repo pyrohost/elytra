@@ -219,10 +219,20 @@ func (r *RusticBackup) Remove() error {
 	defer cancel()
 	defer r.cleanup()
 
-	cmd := r.buildRusticCommandWithContext(ctx, "forget", r.snapshotID)
-	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "rustic: failed to remove snapshot")
+	r.log().WithField("snapshot_id", r.snapshotID).Info("removing rustic snapshot with pruning")
+
+	cmd := r.buildRusticCommandWithContext(ctx, "forget", "--prune", r.snapshotID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		r.log().WithField("output", string(output)).
+			WithField("snapshot_id", r.snapshotID).
+			Error("rustic snapshot removal failed")
+		return errors.Wrapf(err, "rustic: failed to remove snapshot: %s", string(output))
 	}
+
+	r.log().WithField("output", string(output)).
+		WithField("snapshot_id", r.snapshotID).
+		Info("rustic snapshot removed successfully")
 
 	return nil
 }
