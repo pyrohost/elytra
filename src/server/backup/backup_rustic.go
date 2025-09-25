@@ -715,8 +715,18 @@ func (r *RusticBackup) createSecureS3ConfigFile(creds *remote.S3Credentials) (st
 	}
 	defer file.Close()
 
-	// Build S3 configuration - use server UUID for clean, deduplicated paths
+	// Build S3 configuration - extract root path from panel-provided repository path
+	// Panel provides: bucket/prefix/server-uuid, we need: prefix/server-uuid as root
 	repoRoot := r.serverUuid
+	if r.panelRepositoryPath != "" {
+		// Parse the panel path to extract everything after the bucket name
+		// Expected format: bucket/prefix/server-uuid
+		pathParts := strings.Split(r.panelRepositoryPath, "/")
+		if len(pathParts) >= 3 {
+			// Take everything after the bucket (first part)
+			repoRoot = strings.Join(pathParts[1:], "/")
+		}
+	}
 
 	// Create TOML configuration content for opendal:s3 backend
 	configContent := fmt.Sprintf(`[repository]
