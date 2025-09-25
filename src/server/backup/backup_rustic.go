@@ -550,6 +550,15 @@ func (r *RusticBackup) Details(ctx context.Context, parts []remote.BackupPart) (
 
 // initializeRepository initializes the rustic repository
 func (r *RusticBackup) initializeRepository(ctx context.Context) error {
+	cfg := config.Get().System.Backups.Rustic
+
+	// Create cache directory for rustic
+	repoBasePath := filepath.Dir(cfg.Local.RepositoryPath)
+	cacheDir := filepath.Join(repoBasePath, "rustic-cache")
+
+	if err := os.MkdirAll(cacheDir, 0750); err != nil {
+		r.log().WithError(err).Warn("failed to create cache directory, caching may not work properly")
+	}
 	r.repositoryPath = r.getRepositoryPath()
 
 	// Validate repository path
@@ -575,7 +584,6 @@ func (r *RusticBackup) initializeRepository(ctx context.Context) error {
 	initCtx, cancel := context.WithTimeout(ctx, rusticCommandTimeout)
 	defer cancel()
 
-	cfg := config.Get().System.Backups.Rustic
 	cmd := r.buildRusticCommandWithContext(initCtx, "init")
 
 	if cfg.RepositoryVersion > 0 {
@@ -655,8 +663,10 @@ func (r *RusticBackup) buildRusticCommandWithContext(ctx context.Context, args .
 		cmd.Env = append(cmd.Env, fmt.Sprintf("RUSTIC_PASSWORD=%s", r.repositoryPassword))
 	}
 
-	// Disable caching for security
-	cmd.Env = append(cmd.Env, "RUSTIC_NO_CACHE=true")
+	repoBasePath := filepath.Dir(cfg.Local.RepositoryPath)
+	cacheDir := filepath.Join(repoBasePath, "rustic-cache")
+	cmd.Env = append(cmd.Env, fmt.Sprintf("RUSTIC_CACHE_DIR=%s", cacheDir))
+	r.log().WithField("cache_dir", cacheDir).Debug("rustic caching enabled")
 
 	// Set S3 credentials if using S3
 	if r.backupType == "s3" {
