@@ -6,13 +6,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/pyrohost/elytra/src/config"
+	"github.com/pyrohost/elytra/src/jobs"
 	"github.com/pyrohost/elytra/src/remote"
 	"github.com/pyrohost/elytra/src/router/middleware"
 	wserver "github.com/pyrohost/elytra/src/server"
 )
 
 // Configure configures the routing infrastructure for this daemon instance.
-func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
+func Configure(m *wserver.Manager, client remote.Client, jobQueue *jobs.JobQueue) *gin.Engine {
 	gin.SetMode("release")
 
 	router := gin.New()
@@ -22,7 +23,7 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 		return nil
 	}
 	router.Use(middleware.AttachRequestID(), middleware.CaptureErrors(), middleware.SetAccessControlHeaders())
-	router.Use(middleware.AttachServerManager(m), middleware.AttachApiClient(client))
+	router.Use(middleware.AttachServerManager(m), middleware.AttachApiClient(client), middleware.AttachJobQueue(jobQueue))
 	// @todo log this into a different file so you can setup IP blocking for abusive requests and such.
 	// This should still dump requests in debug mode since it does help with understanding the request
 	// lifecycle and quickly seeing what was called leading to the logs. However, it isn't feasible to mix
@@ -107,6 +108,14 @@ func Configure(m *wserver.Manager, client remote.Client) *gin.Engine {
 			backup.POST("", postServerBackup)
 			backup.POST("/:backup/restore", postServerRestoreBackup)
 			backup.DELETE("/:backup", deleteServerBackup)
+		}
+
+		// Job management endpoints
+		jobs := server.Group("/jobs")
+		{
+			jobs.GET("", listJobs)
+			jobs.GET("/:job_id", getJobStatus)
+			jobs.DELETE("/:job_id", cancelJob)
 		}
 	}
 

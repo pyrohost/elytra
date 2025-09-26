@@ -166,3 +166,13 @@ func (s *Server) RestoreBackup(b backup.BackupInterface, reader io.ReadCloser) (
 
 	return errors.WithStackIf(err)
 }
+
+// NotifyPanelOfBackup is a public wrapper for notifyPanelOfBackup
+func (s *Server) NotifyPanelOfBackup(uuid string, ad *backup.ArchiveDetails, successful bool) error {
+	return s.notifyPanelOfBackup(uuid, ad, successful)
+}
+
+// GetServerwideIgnoredFiles is a public wrapper for getServerwideIgnoredFiles
+func (s *Server) GetServerwideIgnoredFiles() (string, error) {
+	return s.getServerwideIgnoredFiles()
+}

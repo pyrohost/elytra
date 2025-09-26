@@ -31,6 +31,7 @@ import (
 	"github.com/pyrohost/elytra/src/internal/cron"
 	"github.com/pyrohost/elytra/src/internal/database"
 	"github.com/pyrohost/elytra/src/internal/rustic"
+	"github.com/pyrohost/elytra/src/jobs"
 	"github.com/pyrohost/elytra/src/loggers/cli"
 	"github.com/pyrohost/elytra/src/remote"
 	"github.com/pyrohost/elytra/src/router"
@@ -339,6 +340,20 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		autotls = false
 	}
 
+	// Initialize job queue for async operations
+	jobQueue := jobs.NewJobQueue(4) // 4 worker threads
+	backupHandlers := jobs.NewBackupJobHandlers(manager, pclient, jobQueue)
+	backupHandlers.RegisterAll()
+
+	// Start the job queue
+	jobQueue.Start(cmd.Context())
+
+	// Setup cleanup for job queue
+	go func() {
+		<-cmd.Context().Done()
+		jobQueue.Stop()
+	}()
+
 	api := config.Get().Api
 	log.WithFields(log.Fields{
 		"use_ssl":      api.Ssl.Enabled,
@@ -351,7 +366,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	// and external clients.
 	s := &http.Server{
 		Addr:      api.Host + ":" + strconv.Itoa(api.Port),
-		Handler:   router.Configure(manager, pclient),
+		Handler:   router.Configure(manager, pclient, jobQueue),
 		TLSConfig: config.DefaultTLSConfig,
 	}
 
