@@ -223,6 +223,16 @@ func (c *client) UpdateBackupSizes(ctx context.Context, data RecalculatedBackupS
 	return nil
 }
 
+// ReportJobCompletion reports job status updates to the Panel (all statuses)
+func (c *client) ReportJobCompletion(ctx context.Context, jobID string, data map[string]interface{}) error {
+	resp, err := c.Put(ctx, fmt.Sprintf("/elytra-jobs/%s", jobID), data)
+	if err != nil {
+		return errors.WithStackIf(err)
+	}
+	_ = resp.Body.Close()
+	return nil
+}
+
 // getServersPaged returns a subset of servers from the Panel API using the
 // pagination query parameters.
 func (c *client) getServersPaged(ctx context.Context, page, limit int) ([]RawServerData, Pagination, error) {

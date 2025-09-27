@@ -340,19 +340,16 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		autotls = false
 	}
 
-	// Initialize job queue for async operations
-	jobQueue := jobs.NewJobQueue(4) // 4 worker threads
-	backupHandlers := jobs.NewBackupJobHandlers(manager, pclient, jobQueue)
-	backupHandlers.RegisterAll()
+	// Initialize job manager for async operations
+	jobManager := jobs.NewManager(4) // 4 worker threads
+	jobManager.SetClient(pclient)     // Set client for Panel notifications
+	jobManager.SetServerManager(manager) // Set server manager for WebSocket events
 
-	// Start the job queue
-	jobQueue.Start(cmd.Context())
+	// Register all job types
+	jobs.SetupJobs(jobManager, manager, pclient)
 
-	// Setup cleanup for job queue
-	go func() {
-		<-cmd.Context().Done()
-		jobQueue.Stop()
-	}()
+	// Start the job manager
+	jobManager.Start()
 
 	api := config.Get().Api
 	log.WithFields(log.Fields{
@@ -366,7 +363,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	// and external clients.
 	s := &http.Server{
 		Addr:      api.Host + ":" + strconv.Itoa(api.Port),
-		Handler:   router.Configure(manager, pclient, jobQueue),
+		Handler:   router.Configure(manager, pclient, jobManager),
 		TLSConfig: config.DefaultTLSConfig,
 	}
 

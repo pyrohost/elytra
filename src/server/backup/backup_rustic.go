@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/apex/log"
 
 	"github.com/pyrohost/elytra/src/config"
 	"github.com/pyrohost/elytra/src/internal/rustic"
@@ -306,18 +307,15 @@ func (r *RusticBackup) Generate(ctx context.Context, fsys *filesystem.Filesystem
 
 	r.log().WithField("output", string(output)).Info("rustic backup command completed successfully")
 
-	// Extract and validate snapshot ID from output
-	shortID := r.extractSnapshotID(string(output))
-	if shortID == "" || !r.isValidSnapshotID(shortID) {
+	// Extract snapshot ID from output (prefer full ID if available)
+	snapshotID := r.extractSnapshotID(string(output))
+	if snapshotID == "" || !r.isValidSnapshotID(snapshotID) {
 		return nil, errors.New("rustic: failed to extract valid snapshot ID from backup output")
 	}
 
-	// Resolve short ID to full ID immediately after backup
-	fullID, err := r.resolveFullSnapshotID(ctx, shortID)
-	if err != nil {
-		return nil, errors.Wrap(err, "rustic: failed to resolve full snapshot ID")
-	}
-	r.snapshotID = fullID
+	// Always use the extracted ID, don't try to resolve short to full
+	// Rustic handles both 8-char and 64-char IDs consistently
+	r.snapshotID = snapshotID
 
 	r.log().WithField("snapshot_id", r.snapshotID).Info("rustic backup created successfully")
 
@@ -442,10 +440,7 @@ func (r *RusticBackup) getSnapshotDataAdded(ctx context.Context) (int64, error) 
 	}
 
 	for _, snapshot := range snapshots {
-		if snapshot.ID == r.snapshotID ||
-			snapshot.Original == r.snapshotID ||
-			(len(r.snapshotID) == 8 && strings.HasPrefix(snapshot.ID, r.snapshotID)) ||
-			(len(r.snapshotID) == 8 && strings.HasPrefix(snapshot.Original, r.snapshotID)) {
+		if r.snapshotMatches(snapshot.ID) || r.snapshotMatches(snapshot.Original) {
 			if snapshot.Summary != nil {
 				return snapshot.Summary.DataAdded, nil
 			}
@@ -487,8 +482,7 @@ func (r *RusticBackup) calculateProportionalSize(ctx context.Context) (int64, er
 		}
 
 		// Check if this is our snapshot
-		if snapshot.ID == r.snapshotID ||
-			(len(r.snapshotID) == 8 && strings.HasPrefix(snapshot.ID, r.snapshotID)) {
+		if r.snapshotMatches(snapshot.ID) {
 			ourSnapshot = &snapshot
 		}
 	}
@@ -598,6 +592,13 @@ func (r *RusticBackup) initializeRepository(ctx context.Context) error {
 		cmd.Args = append(cmd.Args, "--set-datapack-size", fmt.Sprintf("%dMiB", cfg.DataPackSizeMB))
 	}
 
+	// Set up S3 environment for the init command if needed
+	if r.backupType == "s3" && r.s3Credentials != nil {
+		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
+			return errors.Wrap(err, "failed to set S3 environment for repository initialization")
+		}
+	}
+
 	r.log().WithField("backup_type", r.backupType).
 		WithField("repository", r.repositoryPath).
 		Info("starting rustic repository initialization")
@@ -624,6 +625,14 @@ func (r *RusticBackup) repositoryExists(ctx context.Context) (bool, error) {
 	defer r.cleanup()
 
 	cmd := r.buildRusticCommandWithContext(checkCtx, "snapshots", "--json")
+
+	// Set up S3 environment for the command if needed
+	if r.backupType == "s3" && r.s3Credentials != nil {
+		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
+			return false, errors.Wrap(err, "failed to set S3 environment for repository check")
+		}
+	}
+
 	_, err := cmd.Output()
 	if err != nil {
 		// If command fails, repository likely doesn't exist
@@ -804,12 +813,13 @@ func (r *RusticBackup) createSecureIgnoreFile(ignore string) (string, error) {
 // extractSnapshotID extracts the snapshot ID from rustic backup output using regex
 func (r *RusticBackup) extractSnapshotID(output string) string {
 	// Use compiled regex for reliable snapshot ID extraction
-	// Note: rustic outputs only first 8 chars in success message, but we need the full ID
+	// Rustic outputs first 8 chars in success message, this is sufficient for most operations
 	matches := snapshotSavedRegex.FindStringSubmatch(output)
 	if len(matches) >= 2 {
-		shortID := matches[1]
-		// Return the short ID (8 chars), which will be resolved to full ID by caller
-		return shortID
+		snapshotID := matches[1]
+		// Return the extracted ID (typically 8 chars, but could be longer)
+		// Rustic commands accept both short and full IDs
+		return snapshotID
 	}
 	return ""
 }
@@ -855,9 +865,34 @@ func (r *RusticBackup) resolveFullSnapshotID(ctx context.Context, shortID string
 
 // Helper methods for validation and security
 
-// isValidSnapshotID validates snapshot ID format
+// isValidSnapshotID validates snapshot ID format (accepts both 8-char and 64-char IDs)
 func (r *RusticBackup) isValidSnapshotID(id string) bool {
 	return snapshotIDRegex.MatchString(id)
+}
+
+// snapshotMatches checks if a snapshot ID matches our target snapshot ID
+// Handles both exact matches and prefix matches for short IDs
+func (r *RusticBackup) snapshotMatches(snapshotID string) bool {
+	if snapshotID == "" || r.snapshotID == "" {
+		return false
+	}
+
+	// Exact match
+	if snapshotID == r.snapshotID {
+		return true
+	}
+
+	// If our ID is short (8 chars), check if it's a prefix of the snapshot ID
+	if len(r.snapshotID) == 8 && strings.HasPrefix(snapshotID, r.snapshotID) {
+		return true
+	}
+
+	// If the snapshot ID is short (8 chars), check if our ID starts with it
+	if len(snapshotID) == 8 && strings.HasPrefix(r.snapshotID, snapshotID) {
+		return true
+	}
+
+	return false
 }
 
 // validatePath validates filesystem paths for security
@@ -1043,15 +1078,119 @@ func (r *RusticBackup) snapshotExists(ctx context.Context, snapshotID string) (b
 	}
 
 	for _, snapshot := range snapshots {
-		if snapshot.ID == snapshotID ||
-			snapshot.Original == snapshotID ||
-			(len(snapshotID) == 8 && strings.HasPrefix(snapshot.ID, snapshotID)) ||
-			(len(snapshotID) == 8 && strings.HasPrefix(snapshot.Original, snapshotID)) {
+		if r.snapshotMatches(snapshot.ID) || r.snapshotMatches(snapshot.Original) {
 			return true, nil
 		}
 	}
 
 	return false, nil
+}
+
+// VerifySnapshot verifies the integrity of a specific snapshot
+func (r *RusticBackup) VerifySnapshot(ctx context.Context, snapshotID string) (bool, error) {
+	r.log().WithField("snapshot_id", snapshotID).Info("verifying rustic snapshot integrity")
+
+	if !r.isValidSnapshotID(snapshotID) {
+		return false, errors.New("invalid snapshot ID format")
+	}
+
+	// Build rustic check command
+	cmd := r.buildRusticCommandWithContext(ctx, "check", "--read-data", snapshotID)
+
+	// Set up environment for the command
+	if r.backupType == "s3" && r.s3Credentials != nil {
+		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
+			return false, errors.Wrap(err, "failed to set S3 environment")
+		}
+	}
+
+	// Execute verification
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		r.log().WithFields(log.Fields{
+			"snapshot_id": snapshotID,
+			"output":      string(output),
+			"error":       err.Error(),
+		}).Error("rustic snapshot verification failed")
+		return false, errors.Wrap(err, "snapshot verification failed")
+	}
+
+	r.log().WithField("snapshot_id", snapshotID).Info("rustic snapshot verification completed successfully")
+	return true, nil
+}
+
+// GetSnapshotInfo retrieves detailed information about a snapshot
+func (r *RusticBackup) GetSnapshotInfo(ctx context.Context, snapshotID string) (*RusticSnapshotInfo, error) {
+	if !r.isValidSnapshotID(snapshotID) {
+		return nil, errors.New("invalid snapshot ID format")
+	}
+
+	// Get detailed snapshot information
+	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", snapshotID)
+
+	// Set up environment for the command
+	if r.backupType == "s3" && r.s3Credentials != nil {
+		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
+			return nil, errors.Wrap(err, "failed to set S3 environment")
+		}
+	}
+
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get snapshot information")
+	}
+
+	var snapshots []RusticSnapshotInfo
+	if err := json.Unmarshal(output, &snapshots); err != nil {
+		return nil, errors.Wrap(err, "failed to parse snapshot information")
+	}
+
+	if len(snapshots) == 0 {
+		return nil, errors.New("snapshot not found")
+	}
+
+	return &snapshots[0], nil
+}
+
+// CheckRepositoryStatus checks if the repository is accessible and not locked
+func (r *RusticBackup) CheckRepositoryStatus(ctx context.Context) (map[string]interface{}, error) {
+	r.log().Info("checking rustic repository status")
+
+	status := map[string]interface{}{
+		"accessible": false,
+		"locked":     false,
+		"exists":     false,
+	}
+
+	// Check if repository exists and is accessible by listing snapshots
+	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json")
+
+	// Set up environment for the command
+	if r.backupType == "s3" && r.s3Credentials != nil {
+		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
+			return status, errors.Wrap(err, "failed to set S3 environment")
+		}
+	}
+
+	// Execute command
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		status["accessible"] = true
+		status["exists"] = true
+	} else {
+		// Check if it's a lock error
+		if strings.Contains(string(output), "repository is locked") ||
+			strings.Contains(string(output), "lock") {
+			status["locked"] = true
+			status["exists"] = true
+		} else if strings.Contains(string(output), "repository does not exist") ||
+			strings.Contains(string(output), "not found") {
+			status["exists"] = false
+		}
+	}
+
+	r.log().WithField("status", status).Info("rustic repository status check completed")
+	return status, nil
 }
 
 // findSnapshotByBackupUuid finds a snapshot by backup UUID tag
@@ -1089,12 +1228,33 @@ func (r *RusticBackup) findSnapshotByBackupUuid(ctx context.Context, backupUuid 
 
 // cleanup removes temporary files and credentials
 func (r *RusticBackup) cleanup() {
+	// Remove credential files
 	if r.credentialFile != "" {
 		// Remove the entire temporary directory containing the credential file
 		if dir := filepath.Dir(r.credentialFile); strings.Contains(dir, tempDirPrefix) {
 			os.RemoveAll(dir)
 		}
 		r.credentialFile = ""
+	}
+
+	configFiles := []string{
+		"rustic.toml",
+		".rustic.toml",
+		"rustic.yaml",
+		".rustic.yaml",
+	}
+
+	for _, configFile := range configFiles {
+		if _, err := os.Stat(configFile); err == nil {
+			if err := os.Remove(configFile); err != nil {
+				r.log().WithFields(log.Fields{
+					"file":  configFile,
+					"error": err.Error(),
+				}).Warn("failed to remove rustic config file")
+			} else {
+				r.log().WithField("file", configFile).Debug("removed rustic config file")
+			}
+		}
 	}
 }
 

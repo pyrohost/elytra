@@ -5,20 +5,18 @@ import (
 	"github.com/pyrohost/elytra/src/jobs"
 )
 
-const JobQueueKey = "job_queue"
+const JobManagerKey = "job_manager"
 
-// AttachJobQueue attaches a job queue instance to the gin context
-func AttachJobQueue(queue *jobs.JobQueue) gin.HandlerFunc {
+func AttachJobManager(manager *jobs.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set(JobQueueKey, queue)
+		c.Set(JobManagerKey, manager)
 		c.Next()
 	}
 }
 
-// ExtractJobQueue extracts the job queue from the gin context
-func ExtractJobQueue(c *gin.Context) *jobs.JobQueue {
-	if v, ok := c.Get(JobQueueKey); ok {
-		return v.(*jobs.JobQueue)
+func ExtractJobManager(c *gin.Context) *jobs.Manager {
+	if v, ok := c.Get(JobManagerKey); ok {
+		return v.(*jobs.Manager)
 	}
-	panic("request does not have a job queue set in the context")
+	panic("request does not have a job manager set in the context")
 }

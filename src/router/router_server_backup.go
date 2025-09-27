@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/pyrohost/elytra/src/jobs"
 	"github.com/pyrohost/elytra/src/router/middleware"
 	"github.com/pyrohost/elytra/src/server/backup"
 )
@@ -13,11 +12,13 @@ import (
 // postServerBackup initiates a backup operation asynchronously and returns a job ID
 func postServerBackup(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-	jobQueue := middleware.ExtractJobQueue(c)
+	manager := middleware.ExtractJobManager(c)
+
 	var data struct {
 		Adapter backup.AdapterType `json:"adapter"`
 		Uuid    string             `json:"uuid"`
 		Ignore  string             `json:"ignore"`
+		Name    string             `json:"name"`
 	}
 	if err := c.BindJSON(&data); err != nil {
 		return
@@ -34,20 +35,23 @@ func postServerBackup(c *gin.Context) {
 		return
 	}
 
-	// Create job data
-	jobData := jobs.BackupCreateData{
-		ServerID:    s.ID(),
-		BackupUUID:  data.Uuid,
-		AdapterType: string(data.Adapter),
-		Ignore:      data.Ignore,
-		Context: map[string]interface{}{
-			"server":     s.ID(),
-			"request_id": c.GetString("request_id"),
-		},
+	// Create job data for our new system
+	jobData := map[string]interface{}{
+		"server_id":    s.ID(),
+		"backup_uuid":  data.Uuid,
+		"adapter_type": string(data.Adapter),
+		"ignore":       data.Ignore,
+		"name":         data.Name,
 	}
 
-	// Submit job to queue
-	jobID := jobQueue.Submit(jobs.JobTypeBackupCreate, jobData)
+	// Submit job to manager
+	jobID, err := manager.CreateJob("backup_create", jobData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to submit backup job: " + err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"job_id": jobID,
@@ -59,7 +63,7 @@ func postServerBackup(c *gin.Context) {
 // postServerRestoreBackup initiates a backup restoration operation asynchronously and returns a job ID
 func postServerRestoreBackup(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-	jobQueue := middleware.ExtractJobQueue(c)
+	manager := middleware.ExtractJobManager(c)
 	backupUuid := c.Param("backup")
 
 	var data struct {
@@ -79,17 +83,23 @@ func postServerRestoreBackup(c *gin.Context) {
 		return
 	}
 
-	// Create job data
-	jobData := jobs.BackupRestoreData{
-		ServerID:          s.ID(),
-		BackupUUID:        backupUuid,
-		AdapterType:       string(data.Adapter),
-		TruncateDirectory: data.TruncateDirectory,
-		DownloadURL:       data.DownloadUrl,
+	// Create job data for our new system
+	jobData := map[string]interface{}{
+		"server_id":          s.ID(),
+		"backup_uuid":        backupUuid,
+		"adapter_type":       string(data.Adapter),
+		"truncate_directory": data.TruncateDirectory,
+		"download_url":       data.DownloadUrl,
 	}
 
-	// Submit job to queue
-	jobID := jobQueue.Submit(jobs.JobTypeBackupRestore, jobData)
+	// Submit job to manager
+	jobID, err := manager.CreateJob("backup_restore", jobData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to submit restore job: " + err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"job_id": jobID,
@@ -101,7 +111,7 @@ func postServerRestoreBackup(c *gin.Context) {
 // deleteServerBackup initiates a backup deletion operation asynchronously and returns a job ID
 func deleteServerBackup(c *gin.Context) {
 	s := middleware.ExtractServer(c)
-	jobQueue := middleware.ExtractJobQueue(c)
+	manager := middleware.ExtractJobManager(c)
 	backupUuid := c.Param("backup")
 
 	var data struct {
@@ -122,92 +132,25 @@ func deleteServerBackup(c *gin.Context) {
 		return
 	}
 
-	// Create job data
-	jobData := jobs.BackupDeleteData{
-		ServerID:    s.ID(),
-		BackupUUID:  backupUuid,
-		AdapterType: data.AdapterType,
+	// Create job data for our new system
+	jobData := map[string]interface{}{
+		"server_id":    s.ID(),
+		"backup_uuid":  backupUuid,
+		"adapter_type": data.AdapterType,
 	}
 
-	// Submit job to queue
-	jobID := jobQueue.Submit(jobs.JobTypeBackupDelete, jobData)
+	// Submit job to manager
+	jobID, err := manager.CreateJob("backup_delete", jobData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to submit delete job: " + err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusAccepted, gin.H{
 		"job_id": jobID,
 		"status": "accepted",
 		"message": "Backup deletion job has been queued for processing",
-	})
-}
-
-// getJobStatus returns the status of a specific job
-func getJobStatus(c *gin.Context) {
-	jobQueue := middleware.ExtractJobQueue(c)
-	jobID := c.Param("job_id")
-
-	job, exists := jobQueue.GetJob(jobID)
-	if !exists {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Job not found",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"job_id":     job.ID,
-		"type":       job.Type,
-		"status":     job.Status,
-		"progress":   job.Progress,
-		"message":    job.Message,
-		"error":      job.Error,
-		"created_at": job.CreatedAt,
-		"updated_at": job.UpdatedAt,
-	})
-}
-
-// listJobs returns a list of jobs, optionally filtered by status or type
-func listJobs(c *gin.Context) {
-	jobQueue := middleware.ExtractJobQueue(c)
-
-	// Parse query parameters
-	status := jobs.JobStatus(c.Query("status"))
-	jobType := jobs.JobType(c.Query("type"))
-
-	jobList := jobQueue.ListJobs(status, jobType)
-
-	// Convert jobs to response format
-	var response []gin.H
-	for _, job := range jobList {
-		response = append(response, gin.H{
-			"job_id":     job.ID,
-			"type":       job.Type,
-			"status":     job.Status,
-			"progress":   job.Progress,
-			"message":    job.Message,
-			"error":      job.Error,
-			"created_at": job.CreatedAt,
-			"updated_at": job.UpdatedAt,
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"jobs": response,
-	})
-}
-
-// cancelJob cancels a running or pending job
-func cancelJob(c *gin.Context) {
-	jobQueue := middleware.ExtractJobQueue(c)
-	jobID := c.Param("job_id")
-
-	success := jobQueue.CancelJob(jobID)
-	if !success {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Job cannot be cancelled (not found or already completed)",
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Job cancelled successfully",
 	})
 }

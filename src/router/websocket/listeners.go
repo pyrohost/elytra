@@ -78,6 +78,7 @@ var e = []string{
 	server.BackupRestoreCompletedEvent,
 	server.TransferLogsEvent,
 	server.TransferStatusEvent,
+	"backup.status", // Real-time backup progress events
 }
 
 // ListenForServerEvents will listen for different events happening on a server
