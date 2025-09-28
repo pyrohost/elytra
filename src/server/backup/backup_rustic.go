@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"emperror.dev/errors"
@@ -59,6 +60,8 @@ type RusticBackup struct {
 	credentialFile string
 	// Server UUID for repository deduplication (from panel)
 	serverUuid string
+	// Mutex for thread-safe operations
+	mu sync.RWMutex
 }
 
 // RusticSnapshotInfo represents snapshot information from rustic JSON output
@@ -567,6 +570,10 @@ func (r *RusticBackup) initializeRepository(ctx context.Context) error {
 		return nil
 	}
 
+	// Ensure cleanup of any temporary files from repository existence check
+	// before proceeding with initialization to avoid "Config file already exists" error
+	r.cleanup()
+
 	// Create repository directory for local repositories
 	if r.backupType == "local" {
 		if err := os.MkdirAll(r.repositoryPath, secureTempDirMode); err != nil {
@@ -625,20 +632,10 @@ func (r *RusticBackup) repositoryExists(ctx context.Context) (bool, error) {
 	defer r.cleanup()
 
 	cmd := r.buildRusticCommandWithContext(checkCtx, "snapshots", "--json")
-
-	// Set up S3 environment for the command if needed
-	if r.backupType == "s3" && r.s3Credentials != nil {
-		if err := r.setS3EnvironmentSecure(cmd, r.s3Credentials, nil); err != nil {
-			return false, errors.Wrap(err, "failed to set S3 environment for repository check")
-		}
-	}
-
 	_, err := cmd.Output()
-	if err != nil {
-		// If command fails, repository likely doesn't exist
-		return false, nil
-	}
-	return true, nil
+
+	// If command succeeds, repository exists and is accessible
+	return err == nil, nil
 }
 
 // getRepositoryPath returns the path for the repository
@@ -822,45 +819,6 @@ func (r *RusticBackup) extractSnapshotID(output string) string {
 		return snapshotID
 	}
 	return ""
-}
-
-// resolveFullSnapshotID resolves a short snapshot ID (8 chars) to the full snapshot ID (64 chars)
-func (r *RusticBackup) resolveFullSnapshotID(ctx context.Context, shortID string) (string, error) {
-	if len(shortID) == 64 {
-		// Already a full ID
-		return shortID, nil
-	}
-
-	if len(shortID) != 8 {
-		return "", errors.New("rustic: invalid short snapshot ID length")
-	}
-
-	// Query snapshots to find the full ID
-	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", "--filter-tags", fmt.Sprintf("backup_uuid:%s", r.Uuid))
-	output, err := cmd.Output()
-	if err != nil {
-		return "", errors.Wrap(err, "rustic: failed to query snapshots for ID resolution")
-	}
-
-	// Parse grouped snapshot results
-	var results []struct {
-		GroupKey  json.RawMessage      `json:"group_key"`
-		Snapshots []RusticSnapshotInfo `json:"snapshots"`
-	}
-	if err := json.Unmarshal(output, &results); err != nil {
-		return "", errors.Wrap(err, "rustic: failed to parse snapshots JSON for ID resolution")
-	}
-
-	// Find snapshot with matching short ID
-	for _, result := range results {
-		for _, snapshot := range result.Snapshots {
-			if strings.HasPrefix(snapshot.ID, shortID) {
-				return snapshot.ID, nil
-			}
-		}
-	}
-
-	return "", errors.Errorf("rustic: could not resolve short ID %s to full snapshot ID", shortID)
 }
 
 // Helper methods for validation and security
@@ -1066,24 +1024,10 @@ func (r *RusticBackup) getSnapshotOriginalPath(ctx context.Context) (string, err
 // snapshotExists checks if a snapshot exists in the repository
 func (r *RusticBackup) snapshotExists(ctx context.Context, snapshotID string) (bool, error) {
 	cmd := r.buildRusticCommandWithContext(ctx, "snapshots", "--json", snapshotID)
-	output, err := cmd.Output()
-	if err != nil {
-		// If command fails, snapshot likely doesn't exist
-		return false, nil
-	}
+	_, err := cmd.Output()
 
-	var snapshots []RusticSnapshotInfo
-	if err := json.Unmarshal(output, &snapshots); err != nil {
-		return false, nil
-	}
-
-	for _, snapshot := range snapshots {
-		if r.snapshotMatches(snapshot.ID) || r.snapshotMatches(snapshot.Original) {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	// If command succeeds, snapshot exists
+	return err == nil, nil
 }
 
 // VerifySnapshot verifies the integrity of a specific snapshot
@@ -1094,8 +1038,13 @@ func (r *RusticBackup) VerifySnapshot(ctx context.Context, snapshotID string) (b
 		return false, errors.New("invalid snapshot ID format")
 	}
 
-	// Build rustic check command
-	cmd := r.buildRusticCommandWithContext(ctx, "check", "--read-data", snapshotID)
+	defer r.cleanup()
+
+	// Build rustic check command with timeout
+	checkCtx, cancel := context.WithTimeout(ctx, rusticCommandTimeout)
+	defer cancel()
+
+	cmd := r.buildRusticCommandWithContext(checkCtx, "check", "--read-data", snapshotID)
 
 	// Set up environment for the command
 	if r.backupType == "s3" && r.s3Credentials != nil {
@@ -1226,17 +1175,27 @@ func (r *RusticBackup) findSnapshotByBackupUuid(ctx context.Context, backupUuid 
 	return "", nil
 }
 
-// cleanup removes temporary files and credentials
+// cleanup removes temporary files and credentials for this specific backup task only
 func (r *RusticBackup) cleanup() {
-	// Remove credential files
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// Remove credential files and their specific temporary directory
 	if r.credentialFile != "" {
-		// Remove the entire temporary directory containing the credential file
 		if dir := filepath.Dir(r.credentialFile); strings.Contains(dir, tempDirPrefix) {
-			os.RemoveAll(dir)
+			if err := os.RemoveAll(dir); err != nil {
+				r.log().WithFields(log.Fields{
+					"directory": dir,
+					"error":     err.Error(),
+				}).Warn("failed to remove temporary authentication directory")
+			} else {
+				r.log().WithField("directory", dir).Debug("removed temporary authentication directory")
+			}
 		}
 		r.credentialFile = ""
 	}
 
+	// Clean up any config files in current working directory
 	configFiles := []string{
 		"rustic.toml",
 		".rustic.toml",

@@ -645,9 +645,14 @@ func (j *BackupRestoreJob) restoreS3Backup(ctx context.Context, reporter Progres
 	}
 	defer res.Body.Close()
 
+	// Validate HTTP response status
+	if res.StatusCode != http.StatusOK {
+		return nil, errors.Errorf("failed to download backup: HTTP %d %s", res.StatusCode, res.Status)
+	}
+
 	// Validate content type
 	contentType := res.Header.Get("Content-Type")
-	if contentType != "" && !strings.Contains("application/x-gzip application/gzip", contentType) {
+	if contentType != "" && !strings.Contains(contentType, "application/x-gzip") && !strings.Contains(contentType, "application/gzip") && !strings.Contains(contentType, "application/octet-stream") {
 		return nil, errors.Errorf("unsupported content type: %s (expected gzip)", contentType)
 	}
 
