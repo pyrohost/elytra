@@ -1,0 +1,50 @@
+services:
+  elytra:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+        RUSTIC_VERSION: v0.10.0
+        RUSTIC_TARGET: x86_64-unknown-linux-musl
+    image: elytra:dev
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    ports:
+      - "8080:8080"
+      - "2022:2022"
+    environment:
+      # Required: Panel connection and token
+      ELYTRA_PANEL_LOCATION: "https://panel.example.com"
+      ELYTRA_TOKEN_ID: "local-token-id"
+      ELYTRA_TOKEN: "local-token-secret"
+
+      # Optional overrides / useful defaults
+      TZ: "UTC"
+      ELYTRA_DEBUG: "true"
+      ELYTRA_API_HOST: "0.0.0.0"
+      ELYTRA_API_PORT: "8080"
+      ELYTRA_UID: "988"
+      ELYTRA_GID: "988"
+
+      # System path overrides (inside container)
+      ELYTRA_SYSTEM_ROOT_DIRECTORY: "/var/lib/elytra"
+      ELYTRA_SYSTEM_DATA: "/var/lib/elytra/volumes"
+      ELYTRA_SYSTEM_LOG_DIRECTORY: "/var/log/elytra"
+
+      # Docker integration (required for managing containers)
+      ELYTRA_DOCKER_TMPFS_SIZE: "100"
+      # Disable rustic backups in container mode unless you have the 'rustic' binary available
+      ELYTRA_SYSTEM_BACKUPS_RUSTIC_LOCAL_ENABLED: "false"
+
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/lib/docker/containers/:/var/lib/docker/containers/:ro"
+      - "./data:/var/lib/elytra"
+      - "./logs:/var/log/elytra"
+      - "./config.dev.yml:/etc/elytra/config.yml:ro"
+
+networks:
+  default:
+    driver: bridge
