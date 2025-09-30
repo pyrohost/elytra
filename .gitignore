@@ -56,3 +56,4 @@ debug
 *.pprof
 *.pdf
 pprof.*
+data/elytra.db

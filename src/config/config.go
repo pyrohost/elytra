@@ -24,8 +24,8 @@ import (
 	"github.com/gbrlsnchs/jwt/v3"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
-
 	"github.com/pyrohost/elytra/src/system"
+
 )
 
 const DefaultLocation = "/etc/elytra/config.yml"

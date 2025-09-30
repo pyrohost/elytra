@@ -3,37 +3,41 @@ version: '3.8'
 services:
   elytra:
     image: ghcr.io/pyrohost/elytra:latest
-    restart: always
-    networks:
-      - elytra0
+    restart: unless-stopped
+    tty: true
     ports:
       - "8080:8080"
       - "2022:2022"
-    tty: true
     environment:
+      # Required: Panel connection and token
+      ELYTRA_PANEL_LOCATION: "https://panel.example.com"
+      ELYTRA_TOKEN_ID: "panel-token-id"
+      ELYTRA_TOKEN: "panel-token-value"
+
+      # Optional overrides / useful defaults
       TZ: "UTC"
-      ELYTRA_UID: 988
-      ELYTRA_GID: 988
-      ELYTRA_USERNAME: pyrodactyl
+      ELYTRA_DEBUG: "true"
+      ELYTRA_API_HOST: "0.0.0.0"
+      ELYTRA_API_PORT: "8080"
+      ELYTRA_UID: "988"
+      ELYTRA_GID: "988"
+
+      # System path overrides (inside container)
+      ELYTRA_SYSTEM_ROOT_DIRECTORY: "/var/lib/elytra"
+      ELYTRA_SYSTEM_DATA: "/var/lib/elytra/volumes"
+      ELYTRA_SYSTEM_LOG_DIRECTORY: "/var/log/elytra"
+
+      # Docker integration (required for managing containers)
+      ELYTRA_DOCKER_TMPFS_SIZE: "100"
+      # Disable rustic backups in container mode unless you have the 'rustic' binary available
+      ELYTRA_SYSTEM_BACKUPS_RUSTIC_LOCAL_ENABLED: "false"
+
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock"
-      - "/var/lib/docker/containers/:/var/lib/docker/containers/"
-      - "/etc/elytra/:/etc/elytra/"
-      - "/var/lib/elytra/:/var/lib/elytra/"
-      - "/var/log/elytra/:/var/log/elytra/"
-      - "/tmp/elytra/:/tmp/elytra/"
-      - "/etc/ssl/certs:/etc/ssl/certs:ro"
-      # you may need /srv/daemon-data if you are upgrading from an old daemon
-      #- "/srv/daemon-data/:/srv/daemon-data/"
-      # Required for ssl if you use let's encrypt. uncomment to use.
-      #- "/etc/letsencrypt/:/etc/letsencrypt/"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/lib/docker/containers/:/var/lib/docker/containers/:ro"
+      - "./data:/var/lib/elytra"
+      - "./logs:/var/log/elytra"
 
 networks:
-  elytra0:
-    name: elytra0
+  default:
     driver: bridge
-    ipam:
-      config:
-        - subnet: "172.21.0.0/16"
-    driver_opts:
-      com.docker.network.bridge.name: elytra0
