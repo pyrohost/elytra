@@ -57,3 +57,4 @@ debug
 *.pdf
 pprof.*
 data/elytra.db
+.secrets
