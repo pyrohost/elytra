@@ -56,3 +56,7 @@ debug
 *.pprof
 *.pdf
 pprof.*
+
+# Nix output files
+/result
+/result-*
