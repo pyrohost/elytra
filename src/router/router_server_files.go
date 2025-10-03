@@ -78,11 +78,33 @@ func getServerFileContents(c *gin.Context) {
 func getServerListDirectory(c *gin.Context) {
 	s := ExtractServer(c)
 	dir := c.Query("directory")
-	if stats, err := s.Filesystem().ListDirectory(c.Request.Context(), dir); err != nil {
-		middleware.CaptureAndAbort(c, err)
-	} else {
+
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "0"))
+
+	if limit > 0 {
+		stats, total, err := s.Filesystem().ListDirectoryPaged(c.Request.Context(), dir, offset, limit)
+		if err != nil {
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				c.Abort()
+				return
+			}
+			middleware.CaptureAndAbort(c, err)
+			return
+		}
+
+		c.Header("X-Total-Count", strconv.Itoa(total))
 		c.JSON(http.StatusOK, stats)
+		return
 	}
+	
+	stats, err := s.Filesystem().ListDirectory(dir)
+	if err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+	c.Header("X-Total-Count", strconv.Itoa(len(stats)))
+	c.JSON(http.StatusOK, stats)
 }
 
 type renameFile struct {
