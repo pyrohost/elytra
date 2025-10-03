@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,8 +14,7 @@ import (
 	"time"
 
 	"emperror.dev/errors"
-	"github.com/apex/log"
-	"github.com/gabriel-vasile/mimetype"
+	// "github.com/apex/log" // Was only used for the listDirectory function for Mimetype which has now been removed for performance.
 	ignore "github.com/sabhiram/go-gitignore"
 
 	"github.com/pyrohost/elytra/src/config"
@@ -429,64 +429,81 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 			return Stat{}, err
 		}
 
-		var d string
+		mt := "application/octet-stream"
 		if e.Type().IsDir() {
-			d = "inode/directory"
-		} else {
-			d = "application/octet-stream"
+			mt = "inode/directory"
 		}
-		var m *mimetype.MIME
-		if e.Type().IsRegular() {
-			// TODO: I should probably find a better way to do this.
-			eO := e.(interface {
-				Open() (ufs.File, error)
-			})
-			f, err := eO.Open()
-			if err != nil {
-				return Stat{}, err
-			}
-			m, err = mimetype.DetectReader(f)
-			if err != nil {
-				log.Error(err.Error())
-			}
-			_ = f.Close()
-		}
-
-		st := Stat{FileInfo: info, Mimetype: d}
-		if m != nil {
-			st.Mimetype = m.String()
-		}
-		return st, nil
+		return Stat{FileInfo: info, Mimetype: mt}, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Sort entries alphabetically.
-	slices.SortStableFunc(out, func(a, b Stat) int {
-		switch {
-		case a.Name() == b.Name():
-			return 0
-		case a.Name() > b.Name():
-			return 1
-		default:
-			return -1
-		}
-	})
-
-	// Sort folders before other file types.
-	slices.SortStableFunc(out, func(a, b Stat) int {
-		switch {
-		case a.IsDir() && b.IsDir():
-			return 0
-		case a.IsDir():
-			return -1
-		default:
+	// Sort: dirs first, then name
+	slices.SortFunc(out, func(a, b Stat) int {
+		if a.IsDir() != b.IsDir() {
+			if a.IsDir() {
+				return -1
+			}
 			return 1
 		}
+		return strings.Compare(a.Name(), b.Name())
 	})
-
 	return out, nil
+}
+
+func (fs *Filesystem) ListDirectoryPaged(ctx context.Context, p string, offset, limit int) ([]Stat, int, error) {
+	if offset < 0 {
+		offset = 0
+	}
+
+	if limit <= 0 {
+		return []Stat{}, 0, nil
+	}
+	
+	entries, err := fs.unixFS.ReadDir(p)
+	if err != nil {
+		return nil, 0, err
+	}
+	total := len(entries)
+	if offset >= total {
+		return []Stat{}, total, nil
+	}
+
+	// Sort dirs first, then name
+	slices.SortFunc(entries, func(a, b ufs.DirEntry) int {
+		if a.Type().IsDir() != b.Type().IsDir() {
+			if a.Type().IsDir() {
+				return -1
+			}
+			return 1
+		}
+		return strings.Compare(a.Name(), b.Name())
+	})
+
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+
+	out := make([]Stat, 0, end-offset)
+	for _, e := range entries[offset:end] {
+		select {
+		case <-ctx.Done():
+			return nil, 0, ctx.Err()
+		default:
+		}
+		info, err := e.Info()
+		if err != nil {
+			return nil, 0, err
+		}
+		mt := "application/octet-stream"
+		if e.Type().IsDir() {
+			mt = "inode/directory"
+		}
+		out = append(out, Stat{FileInfo: info, Mimetype: mt})
+	}
+	return out, total, nil
 }
 
 func (fs *Filesystem) Chtimes(path string, atime, mtime time.Time) error {
