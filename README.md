@@ -12,8 +12,8 @@ Elytra is an actively maintained fork of Pterodactyl Elytra by Pyro Inc., design
 ## 📚 Documentation
 
 - [Pyrodactyl Panel Documentation](https://pyrodactyl.dev)
-- [Installation Guide](https://pyrodactyl.dev/docs/elytra/installation.html)
-- [Configuration Guide](https://pyrodactyl.dev/docs/elytra/configuration.html)
+- [Installation Guide](https://pyrodactyl.dev/docs/elytra/installation)
+- [Configuration Guide](https://pyrodactyl.dev/docs/elytra/configuration)
 
 ## 🛠️ Issues & Support
 
