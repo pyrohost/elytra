@@ -36,6 +36,7 @@ type Client interface {
 	SendActivityLogs(ctx context.Context, activity []models.Activity) error
 	DeleteBackup(ctx context.Context, backup string) error
 	UpdateBackupSizes(ctx context.Context, data RecalculatedBackupSizesRequest) error
+	ReportJobCompletion(ctx context.Context, jobID string, data map[string]interface{}) error
 }
 
 type client struct {
@@ -97,6 +98,15 @@ func (c *client) Post(ctx context.Context, path string, data interface{}) (*Resp
 		return nil, err
 	}
 	return c.request(ctx, http.MethodPost, path, bytes.NewBuffer(b))
+}
+
+// Put executes a HTTP PUT request.
+func (c *client) Put(ctx context.Context, path string, data interface{}) (*Response, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return c.request(ctx, http.MethodPut, path, bytes.NewBuffer(b))
 }
 
 // requestOnce creates a http request and executes it once. Prefer request()

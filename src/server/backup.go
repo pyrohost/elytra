@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"io"
 	"io/fs"
 	"os"
@@ -95,7 +96,7 @@ func (s *Server) Backup(b backup.BackupInterface) error {
 		_ = b.Remove()
 
 		s.Log().WithField("error", notifyError).Info("failed to notify panel of successful backup state")
-		return err
+		return notifyError
 	} else {
 		s.Log().WithField("backup", b.Identifier()).Info("notified panel of successful backup state")
 	}
@@ -140,12 +141,35 @@ func (s *Server) RestoreBackup(b backup.BackupInterface, reader io.ReadCloser) (
 	// Don't try to restore the server until we have completely stopped the running
 	// instance, otherwise you'll likely hit all types of write errors due to the
 	// server being suspended.
-	if s.Environment.State() != environment.ProcessOfflineState {
-		if err = s.Environment.WaitForStop(s.Context(), 2*time.Minute, false); err != nil {
-			if !client.IsErrNotFound(err) {
+	currentState := s.Environment.State()
+	s.Log().WithField("current_state", currentState).Info("checking server state before restoration")
+
+	if currentState != environment.ProcessOfflineState {
+		s.Log().Info("waiting for server to stop before restoration")
+
+		// Create a context with timeout for the stop operation
+		stopCtx, cancel := context.WithTimeout(s.Context(), 2*time.Minute)
+		defer cancel()
+
+		// Monitor the stop operation with logging
+		done := make(chan error, 1)
+		go func() {
+			done <- s.Environment.WaitForStop(stopCtx, 2*time.Minute, false)
+		}()
+
+		select {
+		case err = <-done:
+			if err != nil && !client.IsErrNotFound(err) { // todo: deprecated
+				s.Log().WithError(err).Error("server failed to stop gracefully during restoration")
 				return errors.WrapIf(err, "server/backup: restore: failed to wait for container stop")
 			}
+			s.Log().Info("server stopped successfully, proceeding with restoration")
+		case <-stopCtx.Done():
+			s.Log().Error("server stop operation timed out during restoration")
+			return errors.New("server/backup: restore: server stop operation timed out after 2 minutes")
 		}
+	} else {
+		s.Log().Info("server already offline, proceeding with restoration")
 	}
 
 	// Attempt to restore the backup to the server by running through each entry
@@ -165,4 +189,14 @@ func (s *Server) RestoreBackup(b backup.BackupInterface, reader io.ReadCloser) (
 	})
 
 	return errors.WithStackIf(err)
+}
+
+// NotifyPanelOfBackup is a public wrapper for notifyPanelOfBackup
+func (s *Server) NotifyPanelOfBackup(uuid string, ad *backup.ArchiveDetails, successful bool) error {
+	return s.notifyPanelOfBackup(uuid, ad, successful)
+}
+
+// GetServerwideIgnoredFiles is a public wrapper for getServerwideIgnoredFiles
+func (s *Server) GetServerwideIgnoredFiles() (string, error) {
+	return s.getServerwideIgnoredFiles()
 }

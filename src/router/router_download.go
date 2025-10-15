@@ -80,7 +80,14 @@ func getDownloadBackup(c *gin.Context) {
 		var rusticBackup *backup.RusticBackup
 		switch token.RepositoryType {
 		case "local":
-			rusticBackup, err = backup.LocateRusticWithPath(client, token.ServerUuid, token.BackupUuid, "local", nil, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			if token.SnapshotId != "" {
+				// Use snapshot ID for direct access
+				rusticBackup, err = backup.LocateRusticBySnapshotID(client, token.ServerUuid, token.SnapshotId, "local", nil, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			} else {
+				// Fallback to failed backup handling for compatibility
+				// todo: completely refactor this dumahh logic - ellie
+				rusticBackup, err = backup.LocateRusticBySnapshotID(client, token.ServerUuid, "", "local", nil, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			}
 		case "s3":
 			if rusticConfig.S3Credentials == nil {
 				c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
@@ -88,7 +95,13 @@ func getDownloadBackup(c *gin.Context) {
 				})
 				return
 			}
-			rusticBackup, err = backup.LocateRusticWithPath(client, token.ServerUuid, token.BackupUuid, "s3", rusticConfig.S3Credentials, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			if token.SnapshotId != "" {
+				// Use snapshot ID for direct access
+				rusticBackup, err = backup.LocateRusticBySnapshotID(client, token.ServerUuid, token.SnapshotId, "s3", rusticConfig.S3Credentials, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			} else {
+				// Fallback to failed backup handling for compatibility
+				rusticBackup, err = backup.LocateRusticBySnapshotID(client, token.ServerUuid, "", "s3", rusticConfig.S3Credentials, rusticConfig.RepositoryPassword, rusticConfig.RepositoryPath)
+			}
 		default:
 			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 				"error": "Invalid repository type for rustic backup.",

@@ -31,6 +31,7 @@ import (
 	"github.com/pyrohost/elytra/src/internal/cron"
 	"github.com/pyrohost/elytra/src/internal/database"
 	"github.com/pyrohost/elytra/src/internal/rustic"
+	"github.com/pyrohost/elytra/src/jobs"
 	"github.com/pyrohost/elytra/src/loggers/cli"
 	"github.com/pyrohost/elytra/src/remote"
 	"github.com/pyrohost/elytra/src/router"
@@ -339,6 +340,17 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 		autotls = false
 	}
 
+	// Initialize job manager for async operations
+	jobManager := jobs.NewManager(4) // 4 worker threads
+	jobManager.SetClient(pclient)     // Set client for Panel notifications
+	jobManager.SetServerManager(manager) // Set server manager for WebSocket events
+
+	// Register all job types
+	jobs.SetupJobs(jobManager, manager, pclient)
+
+	// Start the job manager
+	jobManager.Start()
+
 	api := config.Get().Api
 	log.WithFields(log.Fields{
 		"use_ssl":      api.Ssl.Enabled,
@@ -351,7 +363,7 @@ func rootCmdRun(cmd *cobra.Command, _ []string) {
 	// and external clients.
 	s := &http.Server{
 		Addr:      api.Host + ":" + strconv.Itoa(api.Port),
-		Handler:   router.Configure(manager, pclient),
+		Handler:   router.Configure(manager, pclient, jobManager),
 		TLSConfig: config.DefaultTLSConfig,
 	}
 

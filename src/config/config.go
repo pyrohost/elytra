@@ -322,9 +322,6 @@ type S3RepositoryConfig struct {
 	// S3 bucket name
 	Bucket string `yaml:"bucket"`
 
-	// S3 key prefix for repositories
-	KeyPrefix string `default:"pterodactyl-backups/" yaml:"key_prefix"`
-
 	// Whether to use hot/cold storage setup for S3
 	UseColdStorage bool `default:"false" yaml:"use_cold_storage"`
 

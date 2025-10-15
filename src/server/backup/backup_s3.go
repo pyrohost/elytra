@@ -66,8 +66,6 @@ func (s *S3Backup) WithLogContext(c map[string]interface{}) {
 // Generate creates a new backup on the disk, moves it into the S3 bucket via
 // the provided presigned URL, and then deletes the backup from the disk.
 func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ignore string) (*ArchiveDetails, error) {
-	defer s.Remove()
-
 	a := &filesystem.Archive{
 		Filesystem: fsys,
 		Ignore:     ignore,
@@ -78,6 +76,13 @@ func (s *S3Backup) Generate(ctx context.Context, fsys *filesystem.Filesystem, ig
 		return nil, err
 	}
 	s.log().Info("created backup successfully")
+
+	// Ensure local file cleanup on success or failure
+	defer func() {
+		if _, err := os.Stat(s.Path()); err == nil {
+			_ = os.Remove(s.Path())
+		}
+	}()
 
 	rc, err := os.Open(s.Path())
 	if err != nil {

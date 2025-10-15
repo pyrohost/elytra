@@ -128,7 +128,10 @@ func postUpdateConfiguration(c *gin.Context) {
 		return
 	}
 
-	if err := c.BindJSON(&cfg); err != nil {
+	// Bind JSON directly to the existing config
+	// This preserves the path field automatically and handles most cases correctly
+	// There's some busted ass logic in here that I can't figure out so this is the best I can do - ellie
+	if err := c.BindJSON(cfg); err != nil {
 		return
 	}
 
