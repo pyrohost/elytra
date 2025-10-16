@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/gabriel-vasile/mimetype"
+
 	// "github.com/apex/log" // Was only used for the listDirectory function for Mimetype which has now been removed for performance.
 	ignore "github.com/sabhiram/go-gitignore"
 
@@ -432,6 +434,17 @@ func (fs *Filesystem) ListDirectory(p string) ([]Stat, error) {
 		mt := "application/octet-stream"
 		if e.Type().IsDir() {
 			mt = "inode/directory"
+		} else {
+			// Detect MIME type for files by opening and reading first 512 bytes
+			// NOTE: This is used by the frontend for determining if a file can be edited and
+			// should not be removed! - ellie
+			filePath := filepath.Join(p, e.Name())
+			if f, err := fs.unixFS.Open(filePath); err == nil {
+				if detected, err := mimetype.DetectReader(f); err == nil {
+					mt = detected.String()
+				}
+				f.Close()
+			}
 		}
 		return Stat{FileInfo: info, Mimetype: mt}, nil
 	})
@@ -460,7 +473,7 @@ func (fs *Filesystem) ListDirectoryPaged(ctx context.Context, p string, offset, 
 	if limit <= 0 {
 		return []Stat{}, 0, nil
 	}
-	
+
 	entries, err := fs.unixFS.ReadDir(p)
 	if err != nil {
 		return nil, 0, err
@@ -500,6 +513,17 @@ func (fs *Filesystem) ListDirectoryPaged(ctx context.Context, p string, offset, 
 		mt := "application/octet-stream"
 		if e.Type().IsDir() {
 			mt = "inode/directory"
+		} else {
+			// Detect MIME type for files by opening and reading first 512 bytes
+			// NOTE: This is used by the frontend for determining if a file can be edited and
+			// should not be removed! - ellie
+			filePath := filepath.Join(p, e.Name())
+			if f, err := fs.unixFS.Open(filePath); err == nil {
+				if detected, err := mimetype.DetectReader(f); err == nil {
+					mt = detected.String()
+				}
+				f.Close()
+			}
 		}
 		out = append(out, Stat{FileInfo: info, Mimetype: mt})
 	}
