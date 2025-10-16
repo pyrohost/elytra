@@ -433,12 +433,35 @@ func initConfig() {
 		configPath = d
 	}
 
+	// Try to load configuration from the file first. If it doesn't exist, or
+	// if values required to connect to the Panel are missing, fall back to
+	// reading from environment variables using the ELYTRA_ prefix.
 	err := config.FromFile(configPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			exitWithConfigurationNotice()
+			// Attempt to load from environment variables instead of exiting
+			// immediately. This supports containerized deployments where a
+			// config file may not be present.
+			log2.Printf("cmd/root: configuration file not found (%s), attempting to load from environment variables...", configPath)
+			if err := config.FromEnv(); err != nil {
+				log2.Fatalf("cmd/root: failed to load configuration from environment: %s", err)
+			}
+		} else {
+			log2.Fatalf("cmd/root: error while reading configuration file: %s", err)
 		}
-		log2.Fatalf("cmd/root: error while reading configuration file: %s", err)
+	}
+
+	// Validate we have required configuration; if not, try merging env vars
+	// into the loaded config (useful when some values are stored in env).
+	if err := config.ValidateRequired(config.Get()); err != nil {
+		// Merge environment variables into the existing config and validate again.
+		log2.Printf("cmd/root: configuration incomplete: %s, attempting to merge environment variables...", err)
+		if err := config.MergeEnv(config.Get()); err != nil {
+			log2.Fatalf("cmd/root: failed to merge environment variables: %s", err)
+		}
+		if err := config.ValidateRequired(config.Get()); err != nil {
+			log2.Fatalf("cmd/root: configuration validation failed: %s", err)
+		}
 	}
 	if debug && !config.Get().Debug {
 		config.SetDebugViaFlag(debug)
