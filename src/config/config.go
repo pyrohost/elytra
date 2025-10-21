@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -543,9 +544,9 @@ func EnsurePterodactylUser() error {
 
 	// Our way of detecting if elytra is running inside of Docker.
 	if sysName == "distroless" {
-		_config.System.Username = system.FirstNotEmpty(os.Getenv("ELYTRA_USERNAME"), "pterodactyl")
-		_config.System.User.Uid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_UID"), "988"))
-		_config.System.User.Gid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_GID"), "988"))
+		_config.System.Username = system.FirstNotEmpty(os.Getenv("ELYTRA_USERNAME"), "pyrodactyl")
+		_config.System.User.Uid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_UID"), "8888"))
+		_config.System.User.Gid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_GID"), "8888"))
 		return nil
 	}
 
@@ -575,16 +576,29 @@ func EnsurePterodactylUser() error {
 		return nil
 	}
 
-	command := fmt.Sprintf("useradd --system --no-create-home --shell /usr/sbin/nologin %s", _config.System.Username)
 	// Alpine Linux is the only OS we currently support that doesn't work with the useradd
 	// command, so in those cases we just modify the command a bit to work as expected.
+	gidStr := strconv.Itoa(_config.System.User.Gid)
+	uidStr := strconv.Itoa(_config.System.User.Uid)
+
 	if strings.HasPrefix(sysName, "alpine") {
-		command = fmt.Sprintf("adduser -S -D -H -G %[1]s -s /sbin/nologin %[1]s", _config.System.Username)
 		// We have to create the group first on Alpine, so do that here before continuing on
 		// to the user creation process.
-		if _, err := exec.Command("addgroup", "-S", _config.System.Username).Output(); err != nil {
+		if _, err := exec.Command("addgroup", "-S", "-g", gidStr, _config.System.Username).Output(); err != nil {
 			return err
 		}
+	} else {
+		if _, err := exec.Command("groupadd", "--system", "--gid", gidStr, _config.System.Username).Output(); err != nil {
+			return err
+		}
+	}
+
+	// Create user with UID/GID from configuration
+	var command string
+	if strings.HasPrefix(sysName, "alpine") {
+		command = fmt.Sprintf("adduser -S -D -H -G %[1]s -u %[2]s -s /sbin/nologin %[1]s", _config.System.Username, uidStr)
+	} else {
+		command = fmt.Sprintf("useradd --system --no-create-home --shell /usr/sbin/nologin --uid %[2]s --gid %[1]s %[1]s", _config.System.Username, uidStr)
 	}
 
 	split := strings.Split(command, " ")
