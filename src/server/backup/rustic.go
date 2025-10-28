@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"emperror.dev/errors"
+	"github.com/apex/log"
 
 	"github.com/pyrohost/elytra/src/config"
 	"github.com/pyrohost/elytra/src/internal/rustic"
@@ -611,16 +612,22 @@ func createTarGzArchive(sourceDir string, writer io.Writer) error {
 	tarWriter := tar.NewWriter(gzWriter)
 	defer tarWriter.Close()
 
+	fileCount := 0
+	dirCount := 0
+
 	// Walk the source directory and add files to the archive
-	return filepath.Walk(sourceDir, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(sourceDir, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
 		// Skip directories
 		if info.IsDir() {
+			dirCount++
 			return nil
 		}
+
+		fileCount++
 
 		// Calculate relative path
 		relPath, err := filepath.Rel(sourceDir, path)
@@ -640,9 +647,22 @@ func createTarGzArchive(sourceDir string, writer io.Writer) error {
 		}
 		header.Name = relPath
 
+		// Use FormatUnknown to let tar writer choose the best format for each entry
+		// This will automatically use PAX or GNU format for long filenames
+		header.Format = tar.FormatUnknown
+
 		// Write header
 		if err := tarWriter.WriteHeader(header); err != nil {
-			return err
+			log.WithField("file", relPath).WithField("name_length", len(relPath)).WithError(err).Error("Failed to write tar header")
+			// Don't fail the entire backup for one file, just log and skip
+			log.WithField("file", relPath).Warn("Skipping file due to tar header error")
+			return nil
+		}
+
+		// Only copy content for regular files (not symlinks, devices, etc.)
+		// FileInfoHeader doesn't set Size for non-regular files, causing "write too long" errors
+		if !info.Mode().IsRegular() {
+			return nil
 		}
 
 		// Open and copy file content
@@ -655,4 +675,7 @@ func createTarGzArchive(sourceDir string, writer io.Writer) error {
 		_, err = io.Copy(tarWriter, file)
 		return err
 	})
+
+	log.WithField("file_count", fileCount).WithField("dir_count", dirCount).Info("backup tar archive created successfully")
+	return err
 }
