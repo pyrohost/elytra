@@ -599,7 +599,7 @@ func getCacheDir() string {
 		return filepath.Join(repoBasePath, "rustic-cache")
 	}
 	// Always use a dedicated rustic-cache directory for S3 backups
-	return "/var/lib/pterodactyl/rustic-cache"
+	return "/var/lib/elytra/rustic-cache"
 }
 
 // createTarGzArchive creates a tar.gz archive from a directory and writes it to the provided writer
