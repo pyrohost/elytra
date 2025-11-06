@@ -1,17 +1,24 @@
-version: '3.8'
 services:
   elytra:
-    image: ghcr.io/pyrohost/elytra:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: dev
+        RUSTIC_VERSION: v0.10.0
+        RUSTIC_TARGET: x86_64-unknown-linux-musl
+    image: elytra:dev
     restart: unless-stopped
     tty: true
+    stdin_open: true
     ports:
       - "8080:8080"
       - "2022:2022"
     environment:
       # Required: Panel connection and token
       ELYTRA_PANEL_LOCATION: "https://panel.example.com"
-      ELYTRA_TOKEN_ID: "panel-token-id"
-      ELYTRA_TOKEN: "panel-token-value"
+      ELYTRA_TOKEN_ID: "local-token-id"
+      ELYTRA_TOKEN: "local-token-secret"
 
       # Optional overrides / useful defaults
       TZ: "UTC"
@@ -36,6 +43,7 @@ services:
       - "/var/lib/docker/containers/:/var/lib/docker/containers/:ro"
       - "./data:/var/lib/elytra"
       - "./logs:/var/log/elytra"
+      - "./config.dev.yml:/etc/elytra/config.yml:ro"
 
 networks:
   default:
