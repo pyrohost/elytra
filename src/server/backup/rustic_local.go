@@ -16,9 +16,9 @@ import (
 
 // LocalRepository implements Repository for local filesystem storage
 type LocalRepository struct {
-	config    Config
-	repoPath  string
-	logger    *log.Entry
+	config   Config
+	repoPath string
+	logger   *log.Entry
 }
 
 // NewLocalRepository creates a new local repository instance

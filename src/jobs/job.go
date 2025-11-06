@@ -65,8 +65,8 @@ type Manager struct {
 	jobTypes      map[string]func(data map[string]interface{}) (Job, error)
 	workers       int
 	queue         chan *Instance
-	client        remote.Client      // For notifying Panel automatically
-	serverManager *server.Manager    // For WebSocket event publishing
+	client        remote.Client   // For notifying Panel automatically
+	serverManager *server.Manager // For WebSocket event publishing
 }
 
 // Instance wraps a Job implementation with execution metadata

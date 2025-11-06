@@ -45,11 +45,11 @@ type Config struct {
 	BackupUUID     string
 	ServerUUID     string
 	Password       string
-	BackupType     string               // "local" or "s3"
-	S3Config       *S3Config            `json:"s3_config,omitempty"`
-	LocalPath      string               `json:"local_path,omitempty"`
-	IgnorePatterns string               `json:"ignore_patterns,omitempty"`
-	Tags           map[string]string    `json:"tags,omitempty"`
+	BackupType     string            // "local" or "s3"
+	S3Config       *S3Config         `json:"s3_config,omitempty"`
+	LocalPath      string            `json:"local_path,omitempty"`
+	IgnorePatterns string            `json:"ignore_patterns,omitempty"`
+	Tags           map[string]string `json:"tags,omitempty"`
 }
 
 // S3Config holds S3-specific configuration
@@ -100,8 +100,8 @@ type Repository interface {
 
 // RepositoryInfo contains repository metadata
 type RepositoryInfo struct {
-	TotalSize     int64 `json:"total_size"`
-	SnapshotCount int   `json:"snapshot_count"`
+	TotalSize     int64     `json:"total_size"`
+	SnapshotCount int       `json:"snapshot_count"`
 	LastUpdate    time.Time `json:"last_update"`
 }
 

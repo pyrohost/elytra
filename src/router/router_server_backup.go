@@ -55,8 +55,8 @@ func postServerBackup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{
-		"job_id": jobID,
-		"status": "accepted",
+		"job_id":  jobID,
+		"status":  "accepted",
 		"message": "Backup job has been queued for processing",
 	})
 }
@@ -103,8 +103,8 @@ func postServerRestoreBackup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{
-		"job_id": jobID,
-		"status": "accepted",
+		"job_id":  jobID,
+		"status":  "accepted",
 		"message": "Backup restoration job has been queued for processing",
 	})
 }
@@ -164,8 +164,8 @@ func deleteServerBackup(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusAccepted, gin.H{
-		"job_id": jobID,
-		"status": "accepted",
+		"job_id":  jobID,
+		"status":  "accepted",
 		"message": "Backup deletion job has been queued for processing",
 	})
 }

@@ -7,27 +7,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/apex/log"
-	"github.com/pyrohost/elytra/src/server/backup"
-	"github.com/pyrohost/elytra/src/server"
-	"github.com/pyrohost/elytra/src/remote"
 	"emperror.dev/errors"
+	"github.com/apex/log"
+	"github.com/google/uuid"
+	"github.com/pyrohost/elytra/src/remote"
+	"github.com/pyrohost/elytra/src/server"
+	"github.com/pyrohost/elytra/src/server/backup"
 )
 
 // BackupCreateJob handles backup creation operations
 type BackupCreateJob struct {
-	id              string
-	serverID        string
-	backupUUID      string
-	adapterType     string
-	ignore          string
-	name            string
-	context         map[string]interface{}
-	progress        int
-	message         string
-	serverManager   *server.Manager
-	client          remote.Client
+	id            string
+	serverID      string
+	backupUUID    string
+	adapterType   string
+	ignore        string
+	name          string
+	context       map[string]interface{}
+	progress      int
+	message       string
+	serverManager *server.Manager
+	client        remote.Client
 }
 
 // BackupDeleteJob handles backup deletion operations
@@ -166,13 +166,13 @@ func NewBackupRestoreJob(data map[string]interface{}, serverManager *server.Mana
 }
 
 // BackupCreateJob implementation
-func (j *BackupCreateJob) GetID() string        { return j.id }
-func (j *BackupCreateJob) GetType() string      { return "backup_create" }
-func (j *BackupCreateJob) GetProgress() int     { return j.progress }
-func (j *BackupCreateJob) GetMessage() string   { return j.message }
+func (j *BackupCreateJob) GetID() string      { return j.id }
+func (j *BackupCreateJob) GetType() string    { return "backup_create" }
+func (j *BackupCreateJob) GetProgress() int   { return j.progress }
+func (j *BackupCreateJob) GetMessage() string { return j.message }
 
 // WebSocketJob interface implementation for real-time backup status updates
-func (j *BackupCreateJob) GetServerID() string { return j.serverID }
+func (j *BackupCreateJob) GetServerID() string           { return j.serverID }
 func (j *BackupCreateJob) GetWebSocketEventType() string { return "backup.status" }
 func (j *BackupCreateJob) GetWebSocketEventData() map[string]interface{} {
 	return map[string]interface{}{
@@ -317,13 +317,13 @@ func (j *BackupCreateJob) performBackupWithProgress(ctx context.Context, reporte
 }
 
 // BackupDeleteJob implementation
-func (j *BackupDeleteJob) GetID() string        { return j.id }
-func (j *BackupDeleteJob) GetType() string      { return "backup_delete" }
-func (j *BackupDeleteJob) GetProgress() int     { return j.progress }
-func (j *BackupDeleteJob) GetMessage() string   { return j.message }
+func (j *BackupDeleteJob) GetID() string      { return j.id }
+func (j *BackupDeleteJob) GetType() string    { return "backup_delete" }
+func (j *BackupDeleteJob) GetProgress() int   { return j.progress }
+func (j *BackupDeleteJob) GetMessage() string { return j.message }
 
 // WebSocketJob interface implementation for real-time backup status updates
-func (j *BackupDeleteJob) GetServerID() string { return j.serverID }
+func (j *BackupDeleteJob) GetServerID() string           { return j.serverID }
 func (j *BackupDeleteJob) GetWebSocketEventType() string { return "backup.status" }
 func (j *BackupDeleteJob) GetWebSocketEventData() map[string]interface{} {
 	return map[string]interface{}{
@@ -448,7 +448,7 @@ func (j *BackupDeleteJob) deleteRusticLocalBackup(ctx context.Context, reporter 
 			reporter.ReportProgress(90, "Calculating repository size...")
 
 			result := map[string]interface{}{
-				"deleted":          true,
+				"deleted":         true,
 				"type":            "rustic_local",
 				"successful":      true,
 				"already_deleted": true,
@@ -562,7 +562,7 @@ func (j *BackupDeleteJob) deleteRusticS3Backup(ctx context.Context, reporter Pro
 			reporter.ReportProgress(90, "Calculating repository size...")
 
 			result := map[string]interface{}{
-				"deleted":          true,
+				"deleted":         true,
 				"type":            "rustic_s3",
 				"successful":      true,
 				"already_deleted": true,
@@ -652,13 +652,13 @@ func (j *BackupDeleteJob) deleteRusticS3Backup(ctx context.Context, reporter Pro
 }
 
 // BackupRestoreJob implementation
-func (j *BackupRestoreJob) GetID() string        { return j.id }
-func (j *BackupRestoreJob) GetType() string      { return "backup_restore" }
-func (j *BackupRestoreJob) GetProgress() int     { return j.progress }
-func (j *BackupRestoreJob) GetMessage() string   { return j.message }
+func (j *BackupRestoreJob) GetID() string      { return j.id }
+func (j *BackupRestoreJob) GetType() string    { return "backup_restore" }
+func (j *BackupRestoreJob) GetProgress() int   { return j.progress }
+func (j *BackupRestoreJob) GetMessage() string { return j.message }
 
 // WebSocketJob interface implementation for real-time backup status updates
-func (j *BackupRestoreJob) GetServerID() string { return j.serverID }
+func (j *BackupRestoreJob) GetServerID() string           { return j.serverID }
 func (j *BackupRestoreJob) GetWebSocketEventType() string { return "backup.status" }
 func (j *BackupRestoreJob) GetWebSocketEventData() map[string]interface{} {
 	return map[string]interface{}{
@@ -1001,7 +1001,7 @@ func (j *BackupDeleteAllJob) GetProgress() int   { return j.progress }
 func (j *BackupDeleteAllJob) GetMessage() string { return j.message }
 
 // WebSocketJob interface implementation
-func (j *BackupDeleteAllJob) GetServerID() string { return j.serverID }
+func (j *BackupDeleteAllJob) GetServerID() string           { return j.serverID }
 func (j *BackupDeleteAllJob) GetWebSocketEventType() string { return "backup.status" }
 func (j *BackupDeleteAllJob) GetWebSocketEventData() map[string]interface{} {
 	return map[string]interface{}{
@@ -1193,11 +1193,11 @@ func (j *BackupDeleteAllJob) Execute(ctx context.Context, reporter ProgressRepor
 		reporter.ReportProgress(100, "Repository destruction failed")
 
 		logger.WithFields(log.Fields{
-			"deleted_count":    deletedCount,
-			"failed_count":     failedCount,
-			"destroyed_repos":  destroyedRepos,
-			"total_repos":      len(repositories),
-			"destroy_errors":   len(destroyErrors),
+			"deleted_count":   deletedCount,
+			"failed_count":    failedCount,
+			"destroyed_repos": destroyedRepos,
+			"total_repos":     len(repositories),
+			"destroy_errors":  len(destroyErrors),
 		}).Error("delete all job failed - repository destruction incomplete")
 
 		// Combine all errors
@@ -1215,9 +1215,9 @@ func (j *BackupDeleteAllJob) Execute(ctx context.Context, reporter ProgressRepor
 	reporter.ReportProgress(100, "All backups and repositories destroyed")
 
 	logger.WithFields(log.Fields{
-		"deleted_count":    deletedCount,
-		"failed_count":     failedCount,
-		"destroyed_repos":  destroyedRepos,
+		"deleted_count":   deletedCount,
+		"failed_count":    failedCount,
+		"destroyed_repos": destroyedRepos,
 	}).Info("all backups and repositories destroyed successfully")
 
 	return map[string]interface{}{

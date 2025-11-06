@@ -97,7 +97,7 @@ func getServerListDirectory(c *gin.Context) {
 		c.JSON(http.StatusOK, stats)
 		return
 	}
-	
+
 	stats, err := s.Filesystem().ListDirectory(dir)
 	if err != nil {
 		middleware.CaptureAndAbort(c, err)
