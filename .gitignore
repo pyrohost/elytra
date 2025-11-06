@@ -58,3 +58,7 @@ debug
 pprof.*
 data/elytra.db
 .secrets
+
+# Nix output files
+/result
+/result-*

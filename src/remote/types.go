@@ -165,7 +165,6 @@ type S3Credentials struct {
 	Region          string `json:"region"`
 	Endpoint        string `json:"endpoint,omitempty"`
 	Bucket          string `json:"bucket"`
-	KeyPrefix       string `json:"key_prefix,omitempty"`
 	ForcePathStyle  bool   `json:"force_path_style,omitempty"`
 	DisableSSL      bool   `json:"disable_ssl,omitempty"`
 	CACertPath      string `json:"ca_cert_path,omitempty"`

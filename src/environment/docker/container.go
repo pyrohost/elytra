@@ -64,6 +64,11 @@ func (e *Environment) Attach(ctx context.Context) error {
 		e.SetStream(&st)
 	}
 
+	// Create a channel to signal when the reader goroutine has started.
+	// This prevents a race condition where the container starts producing output
+	// before the goroutine begins reading, causing initial console output to be lost.
+	readerStarted := make(chan struct{})
+
 	go func() {
 		// Don't use the context provided to the function, that'll cause the polling to
 		// exit unexpectedly. We want a custom context for this, the one passed to the
@@ -86,6 +91,10 @@ func (e *Environment) Attach(ctx context.Context) error {
 			}
 		}()
 
+		// Signal that the reader goroutine has started and is about to begin reading.
+		// This must be done before ScanReader is called to ensure proper synchronization.
+		close(readerStarted)
+
 		if err := system.ScanReader(e.stream.Reader, func(v []byte) {
 			e.logCallbackMx.Lock()
 			defer e.logCallbackMx.Unlock()
@@ -96,7 +105,17 @@ func (e *Environment) Attach(ctx context.Context) error {
 		}
 	}()
 
-	return nil
+	// Wait for the reader goroutine to start before returning. This ensures that
+	// when the container starts immediately after this function returns, the output
+	// reader is already active and won't miss any initial console output.
+	//
+	// Use a select with the context to avoid hanging indefinitely if something goes wrong.
+	select {
+	case <-readerStarted:
+		return nil
+	case <-ctx.Done():
+		return errors.WrapIf(ctx.Err(), "environment/docker: context canceled while waiting for reader to start")
+	}
 }
 
 // InSituUpdate performs an in-place update of the Docker container's resource

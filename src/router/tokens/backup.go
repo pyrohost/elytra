@@ -9,6 +9,7 @@ type BackupPayload struct {
 
 	ServerUuid     string `json:"server_uuid"`
 	BackupUuid     string `json:"backup_uuid"`
+	SnapshotId     string `json:"snapshot_id,omitempty"`
 	UniqueId       string `json:"unique_id"`
 	BackupDisk     string `json:"backup_disk,omitempty"`
 	RepositoryType string `json:"repository_type,omitempty"`

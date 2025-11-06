@@ -17,17 +17,35 @@
 
       imports = [
         inputs.treefmt-nix.flakeModule
+        inputs.flake-parts.flakeModules.easyOverlay
       ];
 
-      perSystem = {system, ...}: let
+      perSystem = {
+        system,
+        config,
+        ...
+      }: let
         pkgs = import inputs.nixpkgs {inherit system;};
       in {
-         devShells.default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [
-            go_1_24
-            gofumpt
+            go
             golangci-lint
             gotools
+            config.treefmt.build.wrapper
+          ];
+        };
+
+        packages.elytra = pkgs.buildGoModule rec {
+          pname = "elytra";
+          version = inputs.self.rev or "dirty";
+          src = inputs.self;
+          vendorHash = "sha256-scQQP9hRezE0pB6zh36IEqETktWwE8PH4gBCel8L3hQ=";
+          ldflags = [
+            "-s"
+            "-w"
+            "-X"
+            "github.com/pyrohost/elytra/system.Version=${version}"
           ];
         };
 
@@ -37,16 +55,18 @@
           programs = {
             alejandra.enable = true;
             deadnix.enable = true;
-            gofumpt = {
-              enable = true;
-              extra = true;
-            };
+            gofmt.enable = true;
             shellcheck.enable = true;
             shfmt = {
               enable = true;
               indent_size = 0; # 0 causes shfmt to use tabs
             };
-            yamlfmt.enable = true;
+            yamlfmt = {
+              enable = true;
+              settings = {
+                formatter.retain_line_breaks = true;
+              };
+            };
           };
         };
       };
