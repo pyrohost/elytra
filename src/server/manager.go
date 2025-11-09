@@ -23,9 +23,11 @@ import (
 )
 
 type Manager struct {
-	mu      sync.RWMutex
-	client  remote.Client
-	servers []*Server
+	mu                 sync.RWMutex
+	client             remote.Client
+	servers            []*Server
+	backupOperationsMu sync.Mutex
+	backupOperations   map[string]*sync.Mutex
 }
 
 // NewManager returns a new server manager instance. This will boot up all the
@@ -43,7 +45,10 @@ func NewManager(ctx context.Context, client remote.Client) (*Manager, error) {
 // loading any of the servers from the disk. This allows the caller to set their
 // own servers into the collection as needed.
 func NewEmptyManager(client remote.Client) *Manager {
-	return &Manager{client: client}
+	return &Manager{
+		client:           client,
+		backupOperations: make(map[string]*sync.Mutex),
+	}
 }
 
 // Client returns the HTTP client interface that allows interaction with the
@@ -131,13 +136,27 @@ func (m *Manager) Find(filter func(match *Server) bool) *Server {
 func (m *Manager) Remove(filter func(match *Server) bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	// Collect IDs of servers being removed for lock cleanup
+	removedIDs := make([]string, 0)
 	r := make([]*Server, 0)
 	for _, v := range m.servers {
-		if !filter(v) {
+		if filter(v) {
+			removedIDs = append(removedIDs, v.ID())
+		} else {
 			r = append(r, v)
 		}
 	}
 	m.servers = r
+
+	// Clean up backup operation locks for removed servers
+	if len(removedIDs) > 0 {
+		m.backupOperationsMu.Lock()
+		for _, id := range removedIDs {
+			delete(m.backupOperations, id)
+		}
+		m.backupOperationsMu.Unlock()
+	}
 }
 
 // PersistStates writes the current environment states to the disk for each
@@ -279,4 +298,27 @@ func (m *Manager) init(ctx context.Context) error {
 	log.WithField("duration", fmt.Sprintf("%s", diff)).Info("finished processing server configurations")
 
 	return nil
+}
+
+// AcquireBackupLock acquires a per-server backup operation lock to prevent concurrent backup operations.
+func (m *Manager) AcquireBackupLock(serverID string) {
+	m.backupOperationsMu.Lock()
+	if _, exists := m.backupOperations[serverID]; !exists {
+		m.backupOperations[serverID] = &sync.Mutex{}
+	}
+	mu := m.backupOperations[serverID]
+	m.backupOperationsMu.Unlock()
+
+	mu.Lock()
+}
+
+// ReleaseBackupLock releases a per-server backup operation lock.
+func (m *Manager) ReleaseBackupLock(serverID string) {
+	m.backupOperationsMu.Lock()
+	mu, exists := m.backupOperations[serverID]
+	m.backupOperationsMu.Unlock()
+
+	if exists {
+		mu.Unlock()
+	}
 }

@@ -526,9 +526,9 @@ func (r *S3Repository) deleteSnapshotWithTimeout(ctx context.Context, id string,
 	deleteCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Use forget with --prune and --instant-delete to immediately reclaim storage space
-	// Note: --instant-delete is safe here because Elytra controls all backup operations
-	cmd, err := r.buildCommand(deleteCtx, "forget", "--prune", "--instant-delete", id)
+	// Use forget with --prune and --keep-delete to safely reclaim storage space
+	// The 1-day delay ensures any parallel backups have time to complete and reference shared blobs
+	cmd, err := r.buildCommand(deleteCtx, "forget", "--prune", "--keep-delete", "1d", id)
 	if err != nil {
 		return errors.Wrap(err, "failed to build delete command")
 	}
@@ -707,8 +707,14 @@ func (r *S3Repository) RestoreSnapshot(ctx context.Context, snapshotID string, t
 		return errors.Wrap(err, "failed to build restore command")
 	}
 
-	if err := cmd.Run(); err != nil {
-		return errors.Wrap(err, "S3 restore failed")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		outputStr := string(output)
+		r.logger.WithFields(log.Fields{
+			"snapshot_id": snapshotID,
+			"output":      outputStr,
+		}).Error("rustic restore command failed")
+		return errors.Wrapf(err, "S3 restore failed: %s", outputStr)
 	}
 
 	return nil

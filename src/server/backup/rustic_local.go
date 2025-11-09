@@ -280,7 +280,9 @@ func (r *LocalRepository) DeleteSnapshot(ctx context.Context, id string) error {
 	deleteCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	cmd, err := r.buildCommand(deleteCtx, "forget", "--prune", id)
+	// Use forget with --prune and --keep-delete to safely reclaim storage space
+	// The 1-day delay ensures any parallel backups have time to complete and reference shared blobs
+	cmd, err := r.buildCommand(deleteCtx, "forget", "--prune", "--keep-delete", "1d", id)
 	if err != nil {
 		return errors.Wrap(err, "failed to build delete command")
 	}

@@ -208,6 +208,11 @@ func (j *BackupCreateJob) Execute(ctx context.Context, reporter ProgressReporter
 		return nil, errors.New("server not found: " + j.serverID)
 	}
 
+	j.serverManager.AcquireBackupLock(j.serverID)
+	defer j.serverManager.ReleaseBackupLock(j.serverID)
+
+	logger.Debug("acquired backup operation lock for server")
+
 	reporter.ReportProgress(20, "Initializing backup adapter...")
 
 	var adapter backup.BackupInterface
@@ -361,6 +366,10 @@ func (j *BackupDeleteJob) Execute(ctx context.Context, reporter ProgressReporter
 		return nil, errors.New("server not found: " + j.serverID)
 	}
 
+	j.serverManager.AcquireBackupLock(j.serverID)
+	defer j.serverManager.ReleaseBackupLock(j.serverID)
+
+	logger.Debug("acquired backup operation lock for server")
 	logger.Info("executing backup delete job")
 
 	switch backup.AdapterType(j.adapterType) {
@@ -697,6 +706,11 @@ func (j *BackupRestoreJob) Execute(ctx context.Context, reporter ProgressReporte
 	if !exists {
 		return nil, errors.New("server not found: " + j.serverID)
 	}
+
+	j.serverManager.AcquireBackupLock(j.serverID)
+	defer j.serverManager.ReleaseBackupLock(j.serverID)
+
+	logger.Debug("acquired backup operation lock for server")
 
 	s.SetRestoring(true)
 	defer s.SetRestoring(false)

@@ -5,15 +5,18 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 
+	"github.com/pyrohost/elytra/src/remote"
 	"github.com/pyrohost/elytra/src/router/downloader"
 	"github.com/pyrohost/elytra/src/router/middleware"
 	"github.com/pyrohost/elytra/src/router/tokens"
 	"github.com/pyrohost/elytra/src/server"
+	"github.com/pyrohost/elytra/src/server/backup"
 	"github.com/pyrohost/elytra/src/server/transfer"
 )
 
@@ -221,6 +224,10 @@ func deleteServer(c *gin.Context) {
 		return
 	}
 
+	// Destroy backup repositories to prevent orphaned data on S3 and local storage.
+	// This runs in the background since repository destruction can take time for large repositories.
+	go destroyServerBackupRepositories(c.Request.Context(), s, middleware.ExtractManager(c).Client())
+
 	// Once the environment is terminated, remove the server files from the system. This is
 	// done in a separate process since failure is not the end of the world and can be
 	// manually cleaned up after the fact.
@@ -241,6 +248,76 @@ func deleteServer(c *gin.Context) {
 	})
 
 	c.Status(http.StatusNoContent)
+}
+
+// destroyServerBackupRepositories destroys all backup repositories (local and S3) for a server.
+func destroyServerBackupRepositories(ctx context.Context, s *server.Server, client remote.Client) {
+	logger := log.WithField("server_id", s.ID())
+
+	repositories := []struct {
+		name       string
+		backupType string
+	}{
+		{"local", "local"},
+		{"s3", "s3"},
+	}
+
+	for _, repoInfo := range repositories {
+		func() {
+			rusticConfig, err := client.GetServerRusticConfig(ctx, s.ID(), repoInfo.backupType)
+			if err != nil {
+				logger.WithFields(log.Fields{
+					"type":  repoInfo.backupType,
+					"error": err,
+				}).Warn("failed to get rustic config for repository destruction, repository may not exist")
+				return
+			}
+
+			var repository backup.Repository
+			var repoErr error
+
+			config := backup.Config{
+				ServerUUID: s.ID(),
+				Password:   rusticConfig.RepositoryPassword,
+				BackupType: repoInfo.backupType,
+			}
+
+			if repoInfo.backupType == "local" {
+				config.LocalPath = rusticConfig.RepositoryPath
+				repository, repoErr = backup.NewLocalRepository(config)
+			} else {
+				config.S3Config = &backup.S3Config{
+					Endpoint:        rusticConfig.S3Credentials.Endpoint,
+					Bucket:          rusticConfig.S3Credentials.Bucket,
+					AccessKeyID:     rusticConfig.S3Credentials.AccessKeyID,
+					SecretAccessKey: rusticConfig.S3Credentials.SecretAccessKey,
+					Region:          rusticConfig.S3Credentials.Region,
+				}
+				config.LocalPath = rusticConfig.RepositoryPath
+				repository, repoErr = backup.NewS3Repository(config)
+			}
+
+			if repoErr != nil {
+				logger.WithFields(log.Fields{
+					"type":  repoInfo.backupType,
+					"error": repoErr,
+				}).Error("failed to create repository instance for destruction")
+				return
+			}
+
+			destroyCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+			defer cancel()
+
+			if err := repository.Destroy(destroyCtx); err != nil {
+				logger.WithFields(log.Fields{
+					"type":  repoInfo.backupType,
+					"error": err,
+				}).Error("failed to destroy backup repository")
+			} else {
+				logger.WithField("type", repoInfo.backupType).Info("successfully destroyed backup repository")
+			}
+		}()
+	}
 }
 
 // Adds any of the JTIs passed through in the body to the deny list for the websocket
