@@ -11,6 +11,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/apex/log"
+
 	"github.com/pyrohost/elytra/src/internal/progress"
 )
 
@@ -75,6 +77,7 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		defer pw.Close()
 
 		h := sha256.New()
+		var bytesCopied int64
 		tee := io.TeeReader(src, h)
 
 		dest, err := mp.CreateFormFile("archive", "archive.tar.gz")
@@ -87,7 +90,9 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		go func() {
 			defer close(ch)
 
-			if _, err := io.Copy(dest, tee); err != nil {
+			n, err := io.Copy(dest, tee)
+			bytesCopied = n
+			if err != nil {
 				ch <- fmt.Errorf("failed to stream archive to destination: %w", err)
 				return
 			}
@@ -111,8 +116,19 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 			return
 		}
 
-		if err := mp.WriteField("checksum", hex.EncodeToString(h.Sum(nil))); err != nil {
+		checksum := hex.EncodeToString(h.Sum(nil))
+		t.Log().WithFields(log.Fields{
+			"checksum": checksum,
+			"bytes":    bytesCopied,
+		}).Info("calculated archive checksum")
+
+		if err := mp.WriteField("checksum", checksum); err != nil {
 			errChan <- errors.New("failed to stream checksum")
+			return
+		}
+
+		if err := mp.WriteField("size", fmt.Sprintf("%d", bytesCopied)); err != nil {
+			errChan <- errors.New("failed to stream size")
 			return
 		}
 
@@ -133,7 +149,9 @@ func (t *Transfer) PushArchiveToTarget(url, token string) ([]byte, error) {
 		return nil, err
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status code from destination: %d", res.StatusCode)
+		bodyBytes, _ := io.ReadAll(res.Body)
+		res.Body.Close()
+		return nil, fmt.Errorf("destination returned HTTP %d: %s", res.StatusCode, string(bodyBytes))
 	}
 	t.Log().Debug("waiting for stream to complete")
 	select {

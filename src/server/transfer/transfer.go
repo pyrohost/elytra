@@ -7,6 +7,7 @@ import (
 	"github.com/apex/log"
 	"github.com/mitchellh/colorstring"
 
+	"github.com/pyrohost/elytra/src/remote"
 	"github.com/pyrohost/elytra/src/server"
 	"github.com/pyrohost/elytra/src/system"
 )
@@ -125,4 +126,22 @@ func (t *Transfer) Log() *log.Entry {
 		return log.WithField("subsystem", "transfer")
 	}
 	return t.Server.Log().WithField("subsystem", "transfer")
+}
+
+// StartHeartbeat starts a goroutine that sends periodic heartbeat requests to the panel.
+func (t *Transfer) StartHeartbeat(client remote.Client) {
+	ticker := time.NewTicker(30 * time.Second)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := client.SendTransferHeartbeat(context.Background(), t.Server.ID()); err != nil {
+					t.Log().WithError(err).Warn("failed to send transfer heartbeat to panel")
+				}
+			case <-t.ctx.Done():
+				return
+			}
+		}
+	}()
 }

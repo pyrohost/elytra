@@ -12,18 +12,33 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/pyrohost/elytra/src/config"
 	"github.com/pyrohost/elytra/src/router/middleware"
 	"github.com/pyrohost/elytra/src/router/tokens"
 	"github.com/pyrohost/elytra/src/server"
+	"github.com/pyrohost/elytra/src/server/filesystem"
 	"github.com/pyrohost/elytra/src/server/installer"
 	"github.com/pyrohost/elytra/src/server/transfer"
 )
+
+type countingReader struct {
+	io.Reader
+	count int64
+}
+
+func (c *countingReader) Read(p []byte) (n int, err error) {
+	n, err = c.Reader.Read(p)
+	c.count += int64(n)
+	return
+}
 
 // postTransfers .
 func postTransfers(c *gin.Context) {
@@ -80,6 +95,7 @@ func postTransfers(c *gin.Context) {
 		// We add the transfer to the list of transfers once we have a server instance to use.
 		trnsfr.Server = i.Server()
 		transfer.Incoming().Add(trnsfr)
+		trnsfr.StartHeartbeat(manager.Client())
 	} else {
 		ctx, cancel = context.WithCancel(trnsfr.Context())
 		defer cancel()
@@ -134,6 +150,20 @@ func postTransfers(c *gin.Context) {
 		return
 	}
 
+	stagingDir := filepath.Join(config.Get().System.TmpDirectory, fmt.Sprintf("transfer-%s", trnsfr.Server.ID()))
+
+	_ = os.RemoveAll(stagingDir)
+	if err := os.MkdirAll(stagingDir, 0755); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	defer func() {
+		if err := os.RemoveAll(stagingDir); err != nil && !os.IsNotExist(err) {
+			trnsfr.Log().WithError(err).Warn("failed to cleanup staging directory")
+		}
+	}()
+
 	// Used to calculate the hash of the file as it is being uploaded.
 	h := sha256.New()
 
@@ -145,6 +175,8 @@ func postTransfers(c *gin.Context) {
 		hasArchive       bool
 		hasChecksum      bool
 		checksumVerified bool
+		hasSize          bool
+		bytesReceived    int64
 	)
 out:
 	for {
@@ -164,19 +196,29 @@ out:
 			name := p.FormName()
 			switch name {
 			case "archive":
-				trnsfr.Log().Debug("received archive")
+				trnsfr.Log().Debug("received archive - extracting to staging")
 
-				if err := trnsfr.Server.EnsureDataDirectoryExists(); err != nil {
+				counter := &countingReader{Reader: p}
+				tee := io.TeeReader(counter, h)
+				tempFS, err := filesystem.New(stagingDir, 0, []string{})
+				if err != nil {
+					middleware.CaptureAndAbort(c, err)
+					return
+				}
+				if err := tempFS.ExtractStreamUnsafe(ctx, "/", tee); err != nil {
 					middleware.CaptureAndAbort(c, err)
 					return
 				}
 
-				tee := io.TeeReader(p, h)
-				if err := trnsfr.Server.Filesystem().ExtractStreamUnsafe(ctx, "/", tee); err != nil {
-					middleware.CaptureAndAbort(c, err)
-					return
+				drained, err := io.Copy(io.Discard, tee)
+				if err != nil {
+					trnsfr.Log().WithError(err).Warn("failed to drain remaining stream bytes")
+				}
+				if drained > 0 {
+					trnsfr.Log().WithField("drained_bytes", drained).Debug("consumed trailing bytes from archive stream")
 				}
 
+				bytesReceived = counter.count
 				hasArchive = true
 			case "checksum":
 				trnsfr.Log().Debug("received checksum")
@@ -205,15 +247,56 @@ out:
 				trnsfr.Log().WithFields(log.Fields{
 					"expected": hex.EncodeToString(expected),
 					"actual":   hex.EncodeToString(actual),
-				}).Debug("checksums")
+					"server":   trnsfr.Server.ID(),
+				}).Info("validating transfer checksum")
 
 				if !bytes.Equal(expected[:n], actual) {
-					middleware.CaptureAndAbort(c, errors.New("checksums don't match"))
+					middleware.CaptureAndAbort(c, fmt.Errorf(
+						"checksum mismatch for server %s: expected %s, got %s (received %d bytes)",
+						trnsfr.Server.ID(),
+						hex.EncodeToString(expected[:n]),
+						hex.EncodeToString(actual),
+						bytesReceived,
+					))
 					return
 				}
 
 				trnsfr.Log().Debug("checksums match")
 				checksumVerified = true
+			case "size":
+				trnsfr.Log().Debug("received size")
+
+				if !hasArchive {
+					middleware.CaptureAndAbort(c, errors.New("archive must be sent before the size"))
+					return
+				}
+
+				hasSize = true
+
+				v, err := io.ReadAll(p)
+				if err != nil {
+					middleware.CaptureAndAbort(c, err)
+					return
+				}
+
+				expectedSize, err := strconv.ParseInt(string(v), 10, 64)
+				if err != nil {
+					middleware.CaptureAndAbort(c, err)
+					return
+				}
+
+				trnsfr.Log().WithFields(log.Fields{
+					"expected": expectedSize,
+					"actual":   bytesReceived,
+					"server":   trnsfr.Server.ID(),
+				}).Info("validating transfer size")
+
+				if expectedSize != bytesReceived {
+					middleware.CaptureAndAbort(c, fmt.Errorf("size mismatch: expected %d bytes, received %d bytes", expectedSize, bytesReceived))
+					return
+				}
+
+				trnsfr.Log().Debug("size matches")
 			default:
 				continue
 			}
@@ -221,14 +304,42 @@ out:
 	}
 
 	if !hasArchive || !hasChecksum {
-		middleware.CaptureAndAbort(c, errors.New("missing archive or checksum"))
+		middleware.CaptureAndAbort(c, fmt.Errorf("incomplete transfer for server %s: hasArchive=%v, hasChecksum=%v, hasSize=%v", trnsfr.Server.ID(), hasArchive, hasChecksum, hasSize))
 		return
 	}
 
 	if !checksumVerified {
-		middleware.CaptureAndAbort(c, errors.New("checksums don't match"))
+		middleware.CaptureAndAbort(c, fmt.Errorf("checksum verification failed for server %s", trnsfr.Server.ID()))
 		return
 	}
+
+	trnsfr.Log().Debug("checksum verified - moving from staging to final location")
+
+	if err := trnsfr.Server.EnsureDataDirectoryExists(); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	finalDir := trnsfr.Server.Filesystem().Path()
+
+	_ = trnsfr.Server.Filesystem().UnixFS().Close()
+	if err := os.RemoveAll(finalDir); err != nil && !os.IsNotExist(err) {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	if err := os.MkdirAll(filepath.Dir(finalDir), 0755); err != nil {
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	if err := os.Rename(stagingDir, finalDir); err != nil {
+		trnsfr.Log().WithError(err).Error("atomic move failed - this should not happen on same filesystem")
+		middleware.CaptureAndAbort(c, err)
+		return
+	}
+
+	trnsfr.Log().Debug("files moved to final location successfully")
 
 	// Transfer is almost complete, we just want to ensure the environment is
 	// configured correctly.  We might want to not fail the transfer at this

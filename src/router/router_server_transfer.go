@@ -59,23 +59,47 @@ func postServerTransfer(c *gin.Context) {
 	// Block the server from starting while we are transferring it.
 	s.SetTransferring(true)
 
-	// Ensure the server is offline. Sometimes a "No such container" error gets through
-	// which means the server is already stopped. We can ignore that.
 	if s.Environment.State() != environment.ProcessOfflineState {
-		if err := s.Environment.WaitForStop(
-			s.Context(),
-			time.Second*15,
-			false,
-		); err != nil && !strings.Contains(strings.ToLower(err.Error()), "no such container") {
+		s.Log().Info("stopping server for transfer")
+
+		if err := s.Environment.Stop(s.Context()); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "no such container") {
+				s.Log().WithError(err).Warn("graceful stop failed, will force")
+			}
+		}
+
+		stopCtx, stopCancel := context.WithTimeout(s.Context(), time.Second*10)
+		err := s.Environment.WaitForStop(stopCtx, time.Second*10, false)
+		stopCancel()
+
+		if err != nil && !strings.Contains(strings.ToLower(err.Error()), "no such container") {
+			s.Log().WithError(err).Warn("graceful stop timeout, forcing kill")
+
+			if killErr := s.Environment.Terminate(context.Background(), "SIGKILL"); killErr != nil {
+				if !strings.Contains(strings.ToLower(killErr.Error()), "no such container") {
+					s.SetTransferring(false)
+					middleware.CaptureAndAbort(c, errors.Wrap(killErr, "failed to force stop server"))
+					return
+				}
+			}
+		}
+
+		finalState := s.Environment.State()
+		if finalState != environment.ProcessOfflineState {
 			s.SetTransferring(false)
-			middleware.CaptureAndAbort(c, errors.Wrap(err, "failed to stop server for transfer"))
+			middleware.CaptureAndAbort(c, errors.New("server still running after force stop"))
 			return
 		}
+
+		s.Log().Info("server stopped successfully for transfer")
+
+		time.Sleep(2 * time.Second)
 	}
 
 	// Create a new transfer instance for this server.
 	trnsfr := transfer.New(context.Background(), s)
 	transfer.Outgoing().Add(trnsfr)
+	trnsfr.StartHeartbeat(manager.Client())
 
 	go func() {
 		defer transfer.Outgoing().Remove(trnsfr)
