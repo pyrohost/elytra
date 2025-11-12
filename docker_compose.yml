@@ -1,0 +1,37 @@
+version: '3.8'
+services:
+  elytra:
+    image: ghcr.io/pyrohost/elytra:latest
+    restart: unless-stopped
+    tty: true
+    ports:
+      - "8080:8080"
+      - "2022:2022"
+    environment:
+      # Required: Panel connection and token loaded from enviorment variables
+      ELYTRA_PANEL_LOCATION: "${ELYTRA_PANEL_LOCATION}"
+      ELYTRA_TOKEN_ID: "${ELYTRA_TOKEN_ID}"
+      ELYTRA_TOKEN: "${ELYTRA_TOKEN}"
+      # Optional overrides / useful defaults
+      TZ: "${TZ:-UTC}"
+      ELYTRA_DEBUG: "${ELYTRA_DEBUG:-true}"
+      ELYTRA_API_HOST: "${ELYTRA_API_HOST:-0.0.0.0}"
+      ELYTRA_API_PORT: "${ELYTRA_API_PORT:-8080}"
+      ELYTRA_UID: "${ELYTRA_UID:-988}"
+      ELYTRA_GID: "${ELYTRA_GID:-988}"
+      # System path overrides (inside container)
+      ELYTRA_SYSTEM_ROOT_DIRECTORY: "${ELYTRA_SYSTEM_ROOT_DIRECTORY:-/var/lib/elytra}"
+      ELYTRA_SYSTEM_DATA: "${ELYTRA_SYSTEM_DATA:-/var/lib/elytra/volumes}"
+      ELYTRA_SYSTEM_LOG_DIRECTORY: "${ELYTRA_SYSTEM_LOG_DIRECTORY:-/var/log/elytra}"
+      # Docker integration (required for managing containers)
+      ELYTRA_DOCKER_TMPFS_SIZE: "${ELYTRA_DOCKER_TMPFS_SIZE:-100}"
+      # Disable rustic backups in container mode unless you have the 'rustic' binary available
+      ELYTRA_SYSTEM_BACKUPS_RUSTIC_LOCAL_ENABLED: "${ELYTRA_SYSTEM_BACKUPS_RUSTIC_LOCAL_ENABLED:-false}"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "/var/lib/docker/containers/:/var/lib/docker/containers/:ro"
+      - "./data:/var/lib/elytra"
+      - "./logs:/var/log/elytra"
+networks:
+  default:
+    driver: bridge
