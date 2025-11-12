@@ -7,7 +7,7 @@
 
 **Next-generation daemon for the Pyrodactyl ecosystem**
 
-Elytra is an actively maintained fork of Pterodactyl Elytra by Pyro Inc., designed specifically for the Pyrodactyl panel. Born from the need for continued innovation and development, Elytra delivers enhanced features and reliable updates that keep your server infrastructure running smoothly.
+Elytra is an actively maintained fork of Pterodactyl Wings by Pyro Inc., designed specifically for the Pyrodactyl panel. Born from the need for continued innovation and development, Elytra delivers enhanced features and reliable updates that keep your server infrastructure running smoothly.
 
 ## 📚 Documentation
 
