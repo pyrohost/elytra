@@ -23,10 +23,9 @@ import (
 	"github.com/apex/log"
 	"github.com/creasty/defaults"
 	"github.com/gbrlsnchs/jwt/v3"
+	"github.com/pyrohost/elytra/src/system"
 	"golang.org/x/sys/unix"
 	"gopkg.in/yaml.v2"
-	"github.com/pyrohost/elytra/src/system"
-
 )
 
 const DefaultLocation = "/etc/elytra/config.yml"
@@ -56,6 +55,7 @@ var (
 	_config       *Configuration
 	_jwtAlgo      *jwt.HMACSHA
 	_debugViaFlag bool
+	defaultUserID = 8888
 )
 
 // Locker specific to writing the configuration to the disk, this happens
@@ -170,8 +170,8 @@ type SystemConfiguration struct {
 			ContainerGID int `yaml:"container_gid" default:"0"`
 		} `yaml:"rootless"`
 
-		Uid int `yaml:"uid"`
-		Gid int `yaml:"gid"`
+		Uid int `yaml:"uid" default:"8888"`
+		Gid int `yaml:"gid" default:"8888"`
 	} `yaml:"user"`
 
 	// Passwd controls the mounting of a generated passwd files into containers started by Elytra.
@@ -542,11 +542,29 @@ func EnsurePterodactylUser() error {
 		return err
 	}
 
+	ensureDefaultUserIDs := func() {
+		if _config.System.User.Uid == 0 {
+			_config.System.User.Uid = defaultUserID
+		}
+		if _config.System.User.Gid == 0 {
+			_config.System.User.Gid = defaultUserID
+		}
+	}
+
+	logFinalIDs := func() {
+		log.WithFields(log.Fields{
+			"uid": _config.System.User.Uid,
+			"gid": _config.System.User.Gid,
+		}).Info("using system user identifiers")
+	}
+
 	// Our way of detecting if elytra is running inside of Docker.
 	if sysName == "distroless" {
 		_config.System.Username = system.FirstNotEmpty(os.Getenv("ELYTRA_USERNAME"), "pyrodactyl")
 		_config.System.User.Uid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_UID"), "8888"))
 		_config.System.User.Gid = system.MustInt(system.FirstNotEmpty(os.Getenv("ELYTRA_GID"), "8888"))
+		ensureDefaultUserIDs()
+		logFinalIDs()
 		return nil
 	}
 
@@ -559,6 +577,8 @@ func EnsurePterodactylUser() error {
 		_config.System.Username = u.Username
 		_config.System.User.Uid = system.MustInt(u.Uid)
 		_config.System.User.Gid = system.MustInt(u.Gid)
+		ensureDefaultUserIDs()
+		logFinalIDs()
 		return nil
 	}
 
@@ -573,11 +593,14 @@ func EnsurePterodactylUser() error {
 	} else {
 		_config.System.User.Uid = system.MustInt(u.Uid)
 		_config.System.User.Gid = system.MustInt(u.Gid)
+		ensureDefaultUserIDs()
+		logFinalIDs()
 		return nil
 	}
 
 	// Alpine Linux is the only OS we currently support that doesn't work with the useradd
 	// command, so in those cases we just modify the command a bit to work as expected.
+	ensureDefaultUserIDs()
 	gidStr := strconv.Itoa(_config.System.User.Gid)
 	uidStr := strconv.Itoa(_config.System.User.Uid)
 
@@ -611,6 +634,8 @@ func EnsurePterodactylUser() error {
 	}
 	_config.System.User.Uid = system.MustInt(u.Uid)
 	_config.System.User.Gid = system.MustInt(u.Gid)
+	ensureDefaultUserIDs()
+	logFinalIDs()
 	return nil
 }
 
