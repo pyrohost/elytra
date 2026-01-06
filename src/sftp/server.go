@@ -129,7 +129,7 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 		// If its not a session channel we just move on because its not something we
 		// know how to handle at this point.
 		if ch.ChannelType() != "session" {
-			ch.Reject(ssh.UnknownChannelType, "unknown channel type")
+			_ = ch.Reject(ssh.UnknownChannelType, "unknown channel type")
 			continue
 		}
 
@@ -144,6 +144,7 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 				// this is "subsystem" with a payload that (should) be "sftp". Discard
 				// anything else we receive ("pty", "shell", etc)
 				req.Reply(req.Type == "subsystem" && string(req.Payload[4:]) == "sftp", nil)
+
 			}
 		}(requests)
 
@@ -174,6 +175,32 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 		if err := rs.Serve(); err == io.EOF {
 			_ = rs.Close()
 		}
+	}
+
+	return nil
+}
+
+// Handle spins up a SFTP server instance for the authenticated user's server allowing
+// them access to the underlying filesystem.
+func (c *SFTPServer) Handle(conn *ssh.ServerConn, srv *server.Server, channel ssh.Channel) error {
+	handler, err := NewHandler(conn, srv)
+	if err != nil {
+		return errors.WithStackIf(err)
+	}
+
+	ctx := srv.Sftp().Context(handler.User())
+	rs := sftp.NewRequestServer(channel, handler.Handlers())
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			srv.Log().WithField("user", conn.User()).Warn("sftp: terminating active session")
+			_ = rs.Close()
+		}
+	}()
+
+	if err := rs.Serve(); err == io.EOF {
+		_ = rs.Close()
 	}
 
 	return nil
