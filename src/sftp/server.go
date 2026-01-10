@@ -143,7 +143,7 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 				// Channels have a type that is dependent on the protocol. For SFTP
 				// this is "subsystem" with a payload that (should) be "sftp". Discard
 				// anything else we receive ("pty", "shell", etc)
-				req.Reply(req.Type == "subsystem" && string(req.Payload[4:]) == "sftp", nil)
+				_ = req.Reply(req.Type == "subsystem" && string(req.Payload[4:]) == "sftp", nil)
 
 			}
 		}(requests)
@@ -165,15 +165,10 @@ func (c *SFTPServer) AcceptInbound(conn net.Conn, config *ssh.ServerConfig) erro
 			continue
 		}
 
-		// Spin up a SFTP server instance for the authenticated user's server allowing
-		// them access to the underlying filesystem.
-		handler, err := NewHandler(sconn, srv)
-		if err != nil {
-			return errors.WithStackIf(err)
-		}
-		rs := sftp.NewRequestServer(channel, handler.Handlers())
-		if err := rs.Serve(); err == io.EOF {
-			_ = rs.Close()
+		if srv, ok := c.manager.Get(sconn.Permissions.Extensions["uuid"]); ok {
+			if err := c.Handle(sconn, srv, channel); err != nil {
+				return err
+			}
 		}
 	}
 

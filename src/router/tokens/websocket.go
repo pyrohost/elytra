@@ -24,7 +24,19 @@ var elytraBootTime = time.Now()
 // This is used to allow the Panel to revoke tokens en-masse for a given user & server
 // combination since the JTI for tokens is just MD5(user.id + server.uuid). When a server
 // is booted this listing is fetched from the panel and the Websocket is dynamically updated.
+//
+// deprecated: prefer use of userDenylist
 var denylist sync.Map
+
+var userDenylist sync.Map
+
+// DenyForServer adds a user UUID to the denylist marking any existing JWTs issued
+// to the user as being invalid. This is associated with the user.
+func DenyForServer(s string, u string) {
+	log.WithField("user_uuid", u).WithField("server_uuid", s).Debugf("denying all JWTs created at or before current time for user \"%s\"", u)
+
+	userDenylist.Store(strings.Join([]string{s, u}, ":"), time.Now())
+}
 
 // Adds a JTI to the denylist by marking any JWTs generated before the current time as
 // being invalid if they use the same JTI.
@@ -62,7 +74,7 @@ func (p *WebsocketPayload) GetServerUuid() string {
 }
 
 // Check if the JWT has been marked as denied by the instance due to either being issued
-// before Elytra was booted, or because we have denied all tokens with the same JTI
+// before Wings was booted, or because we have denied all tokens with the same JTI
 // occurring before a set time.
 func (p *WebsocketPayload) Denylisted() bool {
 	// If there is no IssuedAt present for the token, we cannot validate the token so
@@ -71,7 +83,7 @@ func (p *WebsocketPayload) Denylisted() bool {
 		return true
 	}
 
-	// If the time that the token was issued is before the time at which Elytra was booted
+	// If the time that the token was issued is before the time at which Wings was booted
 	// then the token is invalid for our purposes, even if the token "has permission".
 	if p.IssuedAt.Time.Before(elytraBootTime) {
 		return true
@@ -79,7 +91,16 @@ func (p *WebsocketPayload) Denylisted() bool {
 
 	// Finally, if the token was issued before a time that is currently denied for this
 	// token instance, ignore the permissions response.
+	//
+	// This list is deprecated, but we maintain the check here so that custom instances
+	// are able to continue working. We'll remove it in a future release.
 	if t, ok := denylist.Load(p.JWTID); ok {
+		if p.IssuedAt.Time.Before(t.(time.Time)) {
+			return true
+		}
+	}
+
+	if t, ok := userDenylist.Load(strings.Join([]string{p.ServerUUID, p.UserUUID}, ":")); ok {
 		if p.IssuedAt.Time.Before(t.(time.Time)) {
 			return true
 		}

@@ -46,6 +46,7 @@ type Handler struct {
 	server       *server.Server
 	ra           server.RequestActivity
 	uuid         uuid.UUID
+	limiter      *LimiterBucket
 }
 
 var (
@@ -150,7 +151,7 @@ func (h *Handler) SendJson(v Message) error {
 
 		// If the user does not have permission to see backup events, do not emit
 		// them over the socket.
-		if strings.HasPrefix(v.Event, server.BackupCompletedEvent) {
+		if strings.HasPrefix(string(v.Event), server.BackupCompletedEvent) {
 			if !j.HasPermission(PermissionReceiveBackups) {
 				return nil
 			}
@@ -285,6 +286,10 @@ func (h *Handler) HandleInbound(ctx context.Context, m Message) error {
 			})
 			return nil
 		}
+	}
+
+	if h.server.IsSuspended() {
+		return server.ErrSuspended
 	}
 
 	switch m.Event {
