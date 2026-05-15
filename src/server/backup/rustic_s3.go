@@ -7,14 +7,8 @@ package backup
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,24 +54,15 @@ func NewS3Repository(cfg Config) (*S3Repository, error) {
 	return repo, nil
 }
 
-// Initialize creates the S3 repository if it doesn't exist
+// Initialize creates the S3 repository if it doesn't exist.
+// MAC/decryption errors are surfaced rather than treated as corruption,
+// because the dominant cause is a wrong password and the previous
+// recovery path silently destroyed legitimate backup history.
 func (r *S3Repository) Initialize(ctx context.Context) error {
-	// Check if repository already exists
 	exists, err := r.Exists(ctx)
 	if err != nil {
-		// Check if this is a MAC check failure (corrupted repository)
-		if strings.Contains(err.Error(), "MAC check failed") ||
-			strings.Contains(err.Error(), "Data decryption failed") ||
-			strings.Contains(err.Error(), "incompatible with current rustic version") {
-			r.logger.WithField("server_uuid", r.config.ServerUUID).Warn("repository corrupted, backing up and recreating")
-
-			// FIRST: Backup the corrupted repository by moving it to corrupted location
-			if backupErr := r.backupCorruptedRepository(ctx); backupErr != nil {
-				r.logger.WithError(backupErr).Warn("failed to backup corrupted repository, proceeding anyway")
-			}
-
-			// SECOND: Now try to initialize fresh repository (after backup is done)
-			return r.initializeFreshRepository(ctx)
+		if isDecryptionError(err.Error()) {
+			return wrapDecryptionError(err, "repository check", r.config.ServerUUID)
 		}
 		return errors.Wrap(err, "failed to check repository existence")
 	}
@@ -87,7 +72,6 @@ func (r *S3Repository) Initialize(ctx context.Context) error {
 		return nil
 	}
 
-	// Initialize repository with default parameters
 	return r.initializeFreshRepository(ctx)
 }
 
@@ -119,115 +103,6 @@ func (r *S3Repository) initializeFreshRepository(ctx context.Context) error {
 		"root":   fmt.Sprintf("rustic-repos/%s", r.config.ServerUUID),
 	}).Info("S3 repository initialized successfully")
 
-	return nil
-}
-
-// backupCorruptedRepository moves a corrupted repository to backup location using raw S3 operations
-func (r *S3Repository) backupCorruptedRepository(ctx context.Context) error {
-	// Validate prerequisites
-	if r.config.ServerUUID == "" {
-		return errors.New("server UUID is required for backup")
-	}
-
-	sourcePath := fmt.Sprintf("rustic-repos/%s", r.config.ServerUUID)
-	backupPath := fmt.Sprintf("rustic-corrupted-repos/%s", r.config.ServerUUID)
-
-	r.logger.WithFields(log.Fields{
-		"server_uuid": r.config.ServerUUID,
-		"from_path":   sourcePath,
-		"to_path":     backupPath,
-	}).Info("backing up corrupted repository using raw S3 operations")
-
-	// Step 1: Copy corrupted repository to backup location using S3 sync
-	if err := r.copyS3Repository(ctx, sourcePath, backupPath); err != nil {
-		r.logger.WithError(err).Warn("failed to copy corrupted repository to backup location")
-		// Continue anyway - deletion is more important
-	} else {
-		r.logger.WithField("backup_path", backupPath).Info("corrupted repository copied to backup location")
-	}
-
-	// Step 2: Delete original corrupted repository using raw S3 operations
-	if err := r.deleteS3Repository(ctx, sourcePath); err != nil {
-		r.logger.WithError(err).Warn("failed to delete corrupted repository from original location")
-		return errors.Wrap(err, "failed to delete corrupted repository - manual cleanup required")
-	}
-
-	r.logger.WithField("source_path", sourcePath).Info("corrupted repository deleted from original location")
-	return nil
-}
-
-// copyS3Repository copies all objects from source to destination using S3 HTTP API
-func (r *S3Repository) copyS3Repository(ctx context.Context, sourcePath, destPath string) error {
-	r.logger.WithFields(log.Fields{
-		"source_path": sourcePath,
-		"dest_path":   destPath,
-	}).Info("copying repository using S3 HTTP API")
-
-	// List all objects in the source path
-	objects, err := r.listS3Objects(ctx, sourcePath)
-	if err != nil {
-		return errors.Wrap(err, "failed to list source objects")
-	}
-
-	r.logger.WithField("object_count", len(objects)).Info("found objects to copy")
-
-	// Copy each object (skip directory placeholders)
-	copiedCount := 0
-	skippedCount := 0
-	for _, obj := range objects {
-		// Skip directory placeholders (keys ending with "/")
-		if strings.HasSuffix(obj, "/") {
-			skippedCount++
-			continue
-		}
-
-		// Remove the source prefix and add the destination prefix
-		relPath := strings.TrimPrefix(obj, sourcePath+"/")
-		destKey := destPath + "/" + relPath
-
-		if err := r.copyS3Object(ctx, obj, destKey); err != nil {
-			r.logger.WithError(err).WithFields(log.Fields{
-				"source_key": obj,
-				"dest_key":   destKey,
-			}).Warn("failed to copy object, continuing")
-			continue // Continue with other objects
-		}
-		copiedCount++
-	}
-
-	r.logger.WithFields(log.Fields{
-		"copied_count": copiedCount,
-		"total_count":  len(objects),
-	}).Info("S3 copy completed")
-	return nil
-}
-
-// deleteS3Repository deletes all objects in the repository path using S3 HTTP API
-func (r *S3Repository) deleteS3Repository(ctx context.Context, repoPath string) error {
-	r.logger.WithField("repo_path", repoPath).Info("deleting repository using S3 HTTP API")
-
-	// List all objects in the repository path
-	objects, err := r.listS3Objects(ctx, repoPath)
-	if err != nil {
-		return errors.Wrap(err, "failed to list objects for deletion")
-	}
-
-	r.logger.WithField("object_count", len(objects)).Info("found objects to delete")
-
-	// Delete each object
-	deletedCount := 0
-	for _, obj := range objects {
-		if err := r.deleteS3Object(ctx, obj); err != nil {
-			r.logger.WithError(err).WithField("object_key", obj).Warn("failed to delete object, continuing")
-			continue // Continue with other objects
-		}
-		deletedCount++
-	}
-
-	r.logger.WithFields(log.Fields{
-		"deleted_count": deletedCount,
-		"total_count":   len(objects),
-	}).Info("S3 delete completed")
 	return nil
 }
 
@@ -332,28 +207,9 @@ func (r *S3Repository) CreateSnapshot(ctx context.Context, path string, tags map
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		errorOutput := string(output)
-
-		// Check if this is a MAC check failure (corrupted repository)
-		if strings.Contains(errorOutput, "MAC check failed") ||
-			strings.Contains(errorOutput, "Data decryption failed") {
-			r.logger.WithField("server_uuid", r.config.ServerUUID).Warn("repository corrupted during backup, backing up and recreating")
-
-			// FIRST: Backup the corrupted repository by moving it to corrupted location
-			if backupErr := r.backupCorruptedRepository(ctx); backupErr != nil {
-				r.logger.WithError(backupErr).Warn("failed to backup corrupted repository, proceeding anyway")
-			}
-
-			// SECOND: Initialize fresh repository (after backup is done)
-			if initErr := r.initializeFreshRepository(ctx); initErr != nil {
-				return nil, errors.Wrap(initErr, "failed to initialize fresh repository after corruption recovery")
-			}
-
-			// THIRD: Retry the backup with the fresh repository
-			r.logger.WithField("server_uuid", r.config.ServerUUID).Info("retrying backup with fresh repository")
-			return r.CreateSnapshot(ctx, path, tags, ignoreFile)
+		if isDecryptionError(string(output)) {
+			return nil, wrapDecryptionError(err, "backup", r.config.ServerUUID)
 		}
-
 		return nil, errors.New("S3 backup failed")
 	}
 
@@ -929,223 +785,26 @@ func (r *S3Repository) buildCommand(ctx context.Context, args ...string) (*exec.
 	return cmd, nil
 }
 
-// === S3 HTTP API OPERATIONS ===
-
-// listS3Objects lists all objects with the given prefix using S3 HTTP API
-func (r *S3Repository) listS3Objects(ctx context.Context, prefix string) ([]string, error) {
-	endpoint := r.s3Config.Endpoint
-	if endpoint == "" {
-		endpoint = fmt.Sprintf("https://s3.%s.amazonaws.com", r.s3Config.Region)
-	}
-
-	// Build URL
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return nil, errors.Wrap(err, "invalid S3 endpoint")
-	}
-	u.Path = "/" + r.s3Config.Bucket
-
-	// Add query parameters
-	values := url.Values{}
-	values.Set("list-type", "2")
-	values.Set("prefix", prefix+"/")
-	u.RawQuery = values.Encode()
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to create request")
-	}
-
-	// Sign request
-	if err := r.signRequest(req, ""); err != nil {
-		return nil, errors.Wrap(err, "failed to sign request")
-	}
-
-	// Execute request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to execute request")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, errors.Errorf("S3 list failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to read response")
-	}
-
-	// Extract object keys from XML response (simplified parsing)
-	var objects []string
-	content := string(body)
-
-	// Simple XML parsing to extract <Key> elements
-	for {
-		start := strings.Index(content, "<Key>")
-		if start == -1 {
-			break
-		}
-		start += 5 // len("<Key>")
-		end := strings.Index(content[start:], "</Key>")
-		if end == -1 {
-			break
-		}
-		key := content[start : start+end]
-		objects = append(objects, key)
-		content = content[start+end+6:] // Move past "</Key>"
-	}
-
-	return objects, nil
+// isDecryptionError reports whether the given rustic CLI output indicates a
+// MAC or decryption failure. The typical causes are a wrong repository
+// password or a rustic binary version mismatch with the repository on disk.
+func isDecryptionError(output string) bool {
+	return strings.Contains(output, "MAC check failed") ||
+		strings.Contains(output, "Data decryption failed") ||
+		strings.Contains(output, "incompatible with current rustic version")
 }
 
-// copyS3Object copies a single object from source to destination
-func (r *S3Repository) copyS3Object(ctx context.Context, sourceKey, destKey string) error {
-	endpoint := r.s3Config.Endpoint
-	if endpoint == "" {
-		endpoint = fmt.Sprintf("https://s3.%s.amazonaws.com", r.s3Config.Region)
-	}
-
-	// Build URL for destination
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return errors.Wrap(err, "invalid S3 endpoint")
-	}
-	u.Path = "/" + r.s3Config.Bucket + "/" + destKey
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "PUT", u.String(), nil)
-	if err != nil {
-		return errors.Wrap(err, "failed to create request")
-	}
-
-	// Set copy source header
-	copySource := url.QueryEscape(r.s3Config.Bucket + "/" + sourceKey)
-	req.Header.Set("X-Amz-Copy-Source", copySource)
-
-	// Sign request
-	if err := r.signRequest(req, ""); err != nil {
-		return errors.Wrap(err, "failed to sign request")
-	}
-
-	// Execute request
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to execute request")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return errors.Errorf("S3 copy failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// deleteS3Object deletes a single object
-func (r *S3Repository) deleteS3Object(ctx context.Context, key string) error {
-	endpoint := r.s3Config.Endpoint
-	if endpoint == "" {
-		endpoint = fmt.Sprintf("https://s3.%s.amazonaws.com", r.s3Config.Region)
-	}
-
-	// Build URL
-	u, err := url.Parse(endpoint)
-	if err != nil {
-		return errors.Wrap(err, "invalid S3 endpoint")
-	}
-	u.Path = "/" + r.s3Config.Bucket + "/" + key
-
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, "DELETE", u.String(), nil)
-	if err != nil {
-		return errors.Wrap(err, "failed to create request")
-	}
-
-	// Sign request
-	if err := r.signRequest(req, ""); err != nil {
-		return errors.Wrap(err, "failed to sign request")
-	}
-
-	// Execute request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to execute request")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 204 && resp.StatusCode != 200 {
-		body, _ := io.ReadAll(resp.Body)
-		return errors.Errorf("S3 delete failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// signRequest signs an HTTP request using AWS Signature Version 4
-func (r *S3Repository) signRequest(req *http.Request, payload string) error {
-	now := time.Now().UTC()
-	dateStamp := now.Format("20060102")
-	timeStamp := now.Format("20060102T150405Z")
-
-	// Set required headers
-	req.Header.Set("X-Amz-Date", timeStamp)
-	if payload != "" {
-		req.Header.Set("X-Amz-Content-Sha256", fmt.Sprintf("%x", sha256.Sum256([]byte(payload))))
-	} else {
-		req.Header.Set("X-Amz-Content-Sha256", "UNSIGNED-PAYLOAD")
-	}
-
-	// Build canonical request
-	canonicalHeaders := "host:" + req.Host + "\n"
-	canonicalHeaders += "x-amz-content-sha256:" + req.Header.Get("X-Amz-Content-Sha256") + "\n"
-	canonicalHeaders += "x-amz-date:" + timeStamp + "\n"
-
-	signedHeaders := "host;x-amz-content-sha256;x-amz-date"
-
-	canonicalRequest := req.Method + "\n" +
-		req.URL.Path + "\n" +
-		req.URL.RawQuery + "\n" +
-		canonicalHeaders + "\n" +
-		signedHeaders + "\n" +
-		req.Header.Get("X-Amz-Content-Sha256")
-
-	// Create string to sign
-	algorithm := "AWS4-HMAC-SHA256"
-	credentialScope := dateStamp + "/" + r.s3Config.Region + "/s3/aws4_request"
-	stringToSign := algorithm + "\n" +
-		timeStamp + "\n" +
-		credentialScope + "\n" +
-		fmt.Sprintf("%x", sha256.Sum256([]byte(canonicalRequest)))
-
-	// Calculate signature
-	kDate := hmacSHA256([]byte("AWS4"+r.s3Config.SecretAccessKey), dateStamp)
-	kRegion := hmacSHA256(kDate, r.s3Config.Region)
-	kService := hmacSHA256(kRegion, "s3")
-	kSigning := hmacSHA256(kService, "aws4_request")
-	signature := hex.EncodeToString(hmacSHA256(kSigning, stringToSign))
-
-	// Set authorization header
-	authorization := algorithm + " " +
-		"Credential=" + r.s3Config.AccessKeyID + "/" + credentialScope + ", " +
-		"SignedHeaders=" + signedHeaders + ", " +
-		"Signature=" + signature
-
-	req.Header.Set("Authorization", authorization)
-	return nil
-}
-
-// hmacSHA256 computes HMAC-SHA256
-func hmacSHA256(key []byte, data string) []byte {
-	h := hmac.New(sha256.New, key)
-	h.Write([]byte(data))
-	return h.Sum(nil)
+// wrapDecryptionError annotates a rustic decryption error with operator-
+// actionable context. It states explicitly that the S3 repository has not
+// been modified, so an operator triaging the failure knows nothing was
+// destroyed in response to the error.
+func wrapDecryptionError(err error, op, serverUUID string) error {
+	return errors.Wrapf(err,
+		"rustic %s failed for rustic-repos/%s: if this is a 'MAC check failed' or "+
+			"'Data decryption failed' error, the repository password is likely incorrect "+
+			"or the rustic binary version has changed since the repo was created. "+
+			"The repository has NOT been modified. Verify the panel's stored repository "+
+			"password and rustic binary version, then retry. To intentionally start fresh, "+
+			"manually delete the rustic-repos/%s prefix from the bucket and retry",
+		op, serverUUID, serverUUID)
 }
