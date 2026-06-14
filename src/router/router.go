@@ -1,6 +1,8 @@
 package router
 
 import (
+	"regexp"
+
 	"emperror.dev/errors"
 	"github.com/apex/log"
 	"github.com/gin-gonic/gin"
@@ -11,6 +13,8 @@ import (
 	"github.com/pyrohost/elytra/src/router/middleware"
 	wserver "github.com/pyrohost/elytra/src/server"
 )
+
+var tokenRegex = regexp.MustCompile(`([?|&]token=)([^&]+)($|&)`)
 
 // Configure configures the routing infrastructure for this daemon instance.
 func Configure(m *wserver.Manager, client remote.Client, jobManager *jobs.Manager) *gin.Engine {
@@ -36,7 +40,7 @@ func Configure(m *wserver.Manager, client remote.Client, jobManager *jobs.Manage
 			"status":     params.StatusCode,
 			"latency":    params.Latency,
 			"request_id": params.Keys["request_id"],
-		}).Debugf("%s %s", params.MethodColor()+params.Method+params.ResetColor(), params.Path)
+		}).Debugf("%s %s", params.Method, tokenRegex.ReplaceAllString(params.Path, "$1***$3"))
 
 		return ""
 	}))

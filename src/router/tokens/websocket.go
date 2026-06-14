@@ -51,6 +51,7 @@ func DenyJTI(jti string) {
 type WebsocketPayload struct {
 	jwt.Payload
 	sync.RWMutex
+	Scoped
 
 	UserUUID    string   `json:"user_uuid"`
 	ServerUUID  string   `json:"server_uuid"`
